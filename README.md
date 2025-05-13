@@ -1,11 +1,10 @@
 Ros2 package for quick POMDP planning on a Hello-Robot Stretch3
 
 Required packages:
-ros2 humble: [here](https://docs.ros.org/en/humble/index.html)
-pomdp-py from [here](https://github.com/KavrakiLab/vamp-pomdp/tree/cython) or [here](https://github.com/YC-Liang/Ref-VAMP/tree/main) following installation instructions found [here](https://h2r.github.io/pomdp-py/html/installation.html)
-vamp from [here](https://github.com/KavrakiLab/vamp/tree/stretch)
-
-Simulation and trajectory follower: [here](https://github.com/nicholasl23638/stretch_ros2_sim)
+- ros2 humble: [here](https://docs.ros.org/en/humble/index.html)
+- pomdp-py from [here](https://github.com/KavrakiLab/vamp-pomdp/tree/cython) or [here](https://github.com/YC-Liang/Ref-VAMP/tree/main) following installation instructions found [here](https://h2r.github.io/pomdp-py/html/installation.html)
+- vamp from [here](https://github.com/KavrakiLab/vamp/tree/stretch)
+- simulation and trajectory follower: [here](https://github.com/nicholasl23638/stretch_ros2_sim)
 
 Need for experiments:
 - [ ] Get trajectory follower working for synchronized base and joints
