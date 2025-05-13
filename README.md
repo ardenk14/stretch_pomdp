@@ -7,6 +7,7 @@ Required packages:
 - simulation and trajectory follower: [here](https://github.com/nicholasl23638/stretch_ros2_sim)
 
 Need for experiments:
+- [ ] Get POMDP planning and producing actions in a "virtual" environment with static obstacles and predefined landmarks/goals
 - [ ] Get trajectory follower working for synchronized base and joints
 - [ ] Add actions to POMDP that allow for synchronized base and joints
 - [ ] Adjust actions in POMDP to ensure they can well approximate the output from vamp (visualize)
