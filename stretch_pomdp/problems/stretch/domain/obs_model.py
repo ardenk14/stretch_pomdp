@@ -2,9 +2,21 @@ from pomdp_py.framework.basics import ObservationModel
 from stretch_pomdp.problems.stretch.domain.observation import Observation
 from stretch_pomdp.problems.stretch.domain.state import State
 from stretch_pomdp.problems.stretch.domain.action import Action
-from pomdp_py.utils.transformations import normal_log_prob
+#from pomdp_py.utils.transformations import normal_log_prob
 import numpy as np
 
+def normal_log_prob(x, mean, std):
+    """
+    Compute the log probability of x under a normal distribution N(mean, std^2).
+
+    :param x: value or array of values
+    :param mean: mean of the normal distribution
+    :param std: standard deviation (must be > 0)
+    :return: log probability of x under N(mean, std^2)
+    """
+    var = std ** 2
+    log_prob = -0.5 * np.log(2 * np.pi * var) - ((x - mean) ** 2) / (2 * var)
+    return log_prob
 
 class StretchObservationModel(ObservationModel):
     """
@@ -13,7 +25,7 @@ class StretchObservationModel(ObservationModel):
     """
     def __init__(self, vamp_env):
         self._vamp_env = vamp_env
-        self.obs_noise = 0.1
+        self.obs_noise = 0.05#0.2
 
     def probability(self, observation: Observation, next_state: State, action: Action):
         """

@@ -5,7 +5,7 @@ package_name = 'stretch_pomdp'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=find_packages(exclude=['test'], include=['problems', 'problems.*']),
+    packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'pomdp_manager = stretch_pomdp.pomdp_manager:main',
+            'action_follower = stretch_pomdp.action_follower:main',
         ],
     },
 )

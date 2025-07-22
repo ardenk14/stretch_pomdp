@@ -8,6 +8,8 @@ from stretch_pomdp.problems.stretch.domain.state import State
 import stretch_pomdp.problems.stretch.domain.path_planner as pp
 import numpy as np
 
+import rerun as rr
+
 
 class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
@@ -22,7 +24,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         self._Om = StretchObservationModel(vamp_env)
         self._path_planner = pp.PathPlanner(vamp_env)
         self._visual_shortest_path = visual_shortest_path
-        self.max_nodes = 20
+        self.max_nodes = 20 + 1
         self.finite_ref_actions = finite_ref_actions
         self.all_ref_actions = []
         # pre-fill the reference actions with primitive ones
@@ -33,7 +35,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
     def random_sample(self):
         return MacroAction([self.ACTIONS[np.random.choice(np.arange(len(self.ACTIONS)))]])
 
-    def heuristic_sample(self, state, heuristics, epsilon=.5, h=0):
+    def heuristic_sample(self, state, heuristics, epsilon=.05, h=0):
         """
         General sampling queries, with prob(epsilon) sample the state space uniformly
         Otherwise, sample landmarks according to the given heuristics.
@@ -77,8 +79,10 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             else:
                 sampled_lm = lm_pos[np.random.choice(len(lm_pos)-1)]
 
+        state_pos = list(state.get_position) + [0., 0.]
+
         # Generate the shortest path from the sampled state to the landmark
-        path = self._path_planner.shortest_path(state.get_position, np.array(sampled_lm))[:self.max_nodes]
+        path = self._path_planner.shortest_path(state_pos, np.array(sampled_lm))[:self.max_nodes]
         # find macro actions that resemble the shortest path
         # TODO: refine the approximation using continuous actions representation instead of discrete ones
         if len(path) < 2:
@@ -202,40 +206,74 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         """
         :param path: A list of position nodes lead from start path[0] to goal path[-1]
         :return: A list of macro actions that best approximate the path
-        """
+        """ 
+
+        if len(path) < 2:
+            return(MacroAction([]))       
+        
         def get_next_position(position, action):
             """
             Transition function for the navigation model.
-            :param position: agent current position (x,y,z, roll, pitch, yaw)
-            :param action: The action to take.
-            :return: The next state under environment constraints.
+
+            :param position: agent current position (x, y, yaw, ...) in world frame.
+            :param action: action in the robot's frame (dx, dy, dyaw, ...)
+                        where dx is forward, dy is left, and dyaw is rotation.
+            :return: the next position in the world frame.
             """
-            #print("ACTION: ", action.shape)
-            next_position = np.zeros(position.shape)
-            next_position[2:] = position[2:] + action[2:]
-            next_position[0] = position[0] + action[0] * np.cos(position[2])
-            next_position[1] = position[1] + action[0] * np.sin(position[2])
+            next_position = np.zeros_like(position)
+            x, y, yaw = position[0], position[1], position[2]
+
+            dx_body = action[0]
+            dy_body = action[1]
+            dyaw = action[2]
+
+            dx_world = dx_body * np.cos(yaw) - dy_body * np.sin(yaw)
+            dy_world = dx_body * np.sin(yaw) + dy_body * np.cos(yaw)
+
+            next_position[0] = x + dx_world
+            next_position[1] = y + dy_world
+            next_position[2] = yaw + dyaw
+            next_position[3:] = position[3:] + action[3:]
+
             return next_position
         
         actions = []
 
+        #print("PATH START: ", path[0][:3])
+        #print("PATH END: ", path[-1][:3])
+        nd = np.array(path[0])
+        nds = [nd]
         for i in range(len(path) - 1):
-            node = np.array(path[i])
+            node = nd#np.array(path[i])
             next_node = np.array(path[i + 1])
 
             #("NODE: ", node.shape)
             #print("NEXT: ", next_node.shape)
 
             action = min(self.ACTIONS,
-                     key=lambda a: np.linalg.norm(next_node - get_next_position(node, np.array(list(a._motion)+[0., 0.]))))
+                     key=lambda a: np.linalg.norm(next_node[:2] - get_next_position(node, np.array(list(a._motion)+[0., 0.]))[:2]))
+            if action._name == "None":
+                continue
             actions.append(action)
 
+            nd = get_next_position(nd, np.array(list(action._motion)+[0.0, 0.0]))
+            nds.append(nd)
+
+            #print("NODE: ", node)
+            #print("NEXT NODE: ", next_node)
+            #print("ACTION: ", action)
+            #print("NEXT POS: ", get_next_position(nd, np.array(list(action._motion)+[0.0, 0.0])))
+            #print("MOVE: ", next_node - node)
+
+        #print("NODES: ", nds)
+        rr.log("Macro_Actions", rr.LineStrips3D([list(n[:2])+[0.0] for n in nds]))
         # This code is for rendering the shortest path to the GUI. It substantially slows down the simulations.
         """if self._visual_shortest_path:
             for i in range(len(path) - 1):
                 self._vamp_env._sim.addUserDebugLine(lineFromXYZ=path[i][0:3], lineToXYZ=path[i + 1][0:3],
                                                      lineColorRGB=[0.1, 0.1, 0.1],
                                                      lineWidth=5., lifeTime=0)"""
+        #print("ACTIONS DECOMPOSED: ", actions)
         return MacroAction(actions)
 
     def get_all_actions(self, state: State = None, history=None):

@@ -6,7 +6,7 @@ from stretch_pomdp.problems.stretch.domain.action import Action
 class StretchRewardModel(RewardModel):
 
     STEP_REWARD = -.1  # The step penalty for non-terminal states.
-    DZ_REWARD = -800 # The collision penalty.
+    DZ_REWARD = -800#-800 # The collision penalty.
     GOAL_REWARD = 800  # The goal reward.
 
     def __init__(self, vamp_env):

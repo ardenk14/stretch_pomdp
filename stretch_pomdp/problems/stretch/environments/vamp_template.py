@@ -7,6 +7,8 @@ import numpy as np
 import math
 from pomdp_py.utils.transformations import aabb_collision_check
 
+import rerun as rr
+
 def quaternion_from_euler(r, p, y):
     rs2 = math.sin(r / 2)
     rc2 = math.cos(r / 2)
@@ -34,11 +36,12 @@ class VAMPEnv():
         # Customize objects.
         # ====================================================
         # Assumes a single spherical goal region.
-        self._goal = (1, [1.0, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self._goal = (1.0, [1.0, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
 
         self._landmarks = [
-            [[1, 1, 1], [0.5, 0.5, 0.0], [0, 0, 0]],
+            [[1, 1, 1], [0.5, 0.75, 0.0], [0, 0, 0]],
             [[1, 1, 1], [0.5, -0.5, 0.0], [0, 0, 0]],
+            [[1, 1, 1], [1.0, 0.5, 0.0], [0, 0, 0]],
         ]
 
         self._danger_zones = [
@@ -49,13 +52,14 @@ class VAMPEnv():
         ]
 
         self.cuboids = []
-        self.spheres = []
+        self.spheres = [(0.25, (0.5, 0.25, 0.25))]
         self.heightfields = []
         self.cylinders = []
         self.capsules = []
         # ====================================================
 
         self._env = vamp.Environment()
+        self.init_env()
 
     @property
     def get_goal_pos(self):
@@ -77,7 +81,8 @@ class VAMPEnv():
 
     def visualize_key_features(self):
         """Customize to add key objects (e.g. danger zones, landmarks, goal, starting regions) to the GUI."""
-        raise NotImplementedError
+        for radius, center in self.spheres:
+            rr.log("Obstacles", rr.Points3D(center, radii=[radius]), static=True)
 
     def get_landmarks_pos(self, include_goal=True):
         lms = [lm[1] + [0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0] for lm in self._landmarks]
@@ -87,9 +92,13 @@ class VAMPEnv():
 
     def load_primitive_collision_objects(self):
         for radius, center in self.spheres:
-            self._env.add_sphere(vamp.make_sphere(*center, radius))
+            self._env.add_sphere(vamp.Sphere(center, radius))
 
-        for radius, height, center, euler in self.capsules:
+        print("CENTER: ", center)
+        print("RADIUS: ", radius)
+        rr.log("Obstacles", rr.Points3D(center, radii=[radius]), static=True)
+
+        """for radius, height, center, euler in self.capsules:
             self._env.add_capsule(vamp.make_cylinder(radius, height, *center, *euler))
 
         for half_extents, center, euler in self.cuboids:
@@ -101,7 +110,7 @@ class VAMPEnv():
             center_temp = list(center)
             center_temp[2] = center_temp[2] + (scale_temp[2] / 2)
 
-            self._env.add_heightfield(vamp.png_to_heightfield(path, center, scale))
+            self._env.add_heightfield(vamp.png_to_heightfield(path, center, scale))"""
 
     def collision_checker(self, config):
         """Returns True if in collision, False otherwise."""
@@ -111,9 +120,12 @@ class VAMPEnv():
 
     def dz_checker(self, config):
         # work for axis aligned danger zone bounding box only
-        for half_extent, center, _ in self._danger_zones:
-            if aabb_collision_check(half_extent, center, config[:3]):
+        for sphere in self.spheres:
+            if np.linalg.norm(np.array(config[0:2]) - np.array(sphere[1])[:2]) < sphere[0]:
                 return True
+        #for half_extent, center, _ in self._danger_zones:
+        #    if aabb_collision_check(half_extent, center, config[:3]):
+        #        return True
         return False
 
     def lm_checker(self, config):
@@ -124,4 +136,4 @@ class VAMPEnv():
         return False
 
     def goal_checker(self, config):
-        return np.linalg.norm(np.array(config[0:3]) - np.array(self._goal[1][:3])) < self._goal[0]
+        return np.linalg.norm(np.array(config[0:2]) - np.array(self._goal[1][:2])) < 0.1#self._goal[0]

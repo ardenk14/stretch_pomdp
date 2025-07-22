@@ -1,3 +1,4 @@
+import random
 from pomdp_py.framework.basics import TransitionModel
 from stretch_pomdp.problems.stretch.domain.action import Action
 from stretch_pomdp.problems.stretch.domain.state import State
@@ -21,10 +22,20 @@ class StretchTransitionModel(TransitionModel):
         :return: The next state under environment constraints.
         """
         action = action._motion
-        next_position = np.zeros(position.shape)
-        next_position[2:] = position[2:] + np.array(action)[2:]
-        next_position[0] = position[0] + action[0] * np.cos(position[2])
-        next_position[1] = position[1] + action[0] * np.sin(position[2])
+        next_position = np.zeros_like(position)
+        x, y, yaw = position[0], position[1], position[2]
+
+        dx_body = action[0]
+        dy_body = action[1]
+        dyaw = action[2]
+
+        dx_world = dx_body * np.cos(yaw) - dy_body * np.sin(yaw)
+        dy_world = dx_body * np.sin(yaw) + dy_body * np.cos(yaw)
+
+        next_position[0] = x + dx_world
+        next_position[1] = y + dy_world
+        next_position[2] = yaw + dyaw
+        next_position[3:] = position[3:] + action[3:]
         if self._vamp_env.collision_checker(list(next_position) +[0., 0.]):
             return position
         return next_position
@@ -34,7 +45,8 @@ class StretchTransitionModel(TransitionModel):
         if state.terminal:
             return state
 
-        realised_action = action # TODO: Add randomness (action.sample())
+        realised_action = random.choices([Action("None"), action], weights=[0.005, 0.995])[0] # TODO: Add randomness (action.sample())
+        realised_action = Action(realised_action._name, v_noise = np.random.normal(0, 0.01), w_noise = np.random.normal(0, 0.02))
         #state_pos = np.array(list(state.get_position) + [0., 0.])
         next_position = self.move_if_valid_next_position(state.get_position, realised_action)
 
