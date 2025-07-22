@@ -85,6 +85,10 @@ class ActionFollower(Node):
 
         self.total = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.n = 0
+        cmd = Twist()
+        cmd.linear.x = 0.0
+        cmd.angular.z = 0.0
+        self.cmd = cmd
 
         # Subscribe to actions and odometry
         self.actions_sub = self.create_subscription(
@@ -99,7 +103,8 @@ class ActionFollower(Node):
         self.act_obs_pub = self.create_publisher(Float64MultiArray, '/act_obs', 1)
 
         # Set timer to run each macro action for n seconds and grab the observation at the end
-        self.timer = self.create_timer(self.T, self.control_loop) # Time must match the time parameter in the POMDP actions.py
+        self.control = self.create_timer(0.25, self.control_loop) # Time must match the time parameter in the POMDP actions.py
+        self.action_update = self.create_timer(self.T, self.update_action)
 
     def odom_callback(self, msg):
         def quaternion_to_yaw(quaternion):
@@ -118,7 +123,11 @@ class ActionFollower(Node):
     def action_callback(self, msg):
         self.actions = deque(np.array(msg.data).reshape([dim.size for dim in msg.layout.dim]))
 
+
     def control_loop(self):
+        self.cmd_vel_pub.publish(self.cmd)
+
+    def update_action(self):
         # From last observation and current observation, solve for action (diff in position in starting frame)
         
         if self.last_action is not None:
@@ -162,7 +171,8 @@ class ActionFollower(Node):
             cmd = Twist()
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
-            self.cmd_vel_pub.publish(cmd)
+            #self.cmd_vel_pub.publish(cmd)
+            self.cmd = cmd
             return
         
         # Set new action
@@ -179,7 +189,8 @@ class ActionFollower(Node):
         #self.get_logger().info("PUB TWIST")
         #print("LINEAR V: ", cmd.linear.x)
         #print("ANGULAR V: ", cmd.angular.z)
-        self.cmd_vel_pub.publish(cmd)
+        #self.cmd_vel_pub.publish(cmd)
+        self.cmd = cmd
 
         # TODO: Set and publish the joint commands for this action
 
