@@ -74,8 +74,8 @@ class ActionFollower(Node):
         #rr.connect_grpc()
 
         # TODO: What is the timing map between action.py and here?
-        self.T = 2.0#0.2
-        self.V = 0.3#0.1 Really 0.055
+        self.T = 0.7#0.2
+        self.V = 0.07#0.3#0.1 Really 0.055
 
         self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0.])
         self.last_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0.])
@@ -85,6 +85,7 @@ class ActionFollower(Node):
 
         self.total = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.n = 0
+
         cmd = Twist()
         cmd.linear.x = 0.0
         cmd.angular.z = 0.0
@@ -103,7 +104,7 @@ class ActionFollower(Node):
         self.act_obs_pub = self.create_publisher(Float64MultiArray, '/act_obs', 1)
 
         # Set timer to run each macro action for n seconds and grab the observation at the end
-        self.control = self.create_timer(0.25, self.control_loop) # Time must match the time parameter in the POMDP actions.py
+        self.control = self.create_timer(0.1, self.control_loop) # Time must match the time parameter in the POMDP actions.py
         self.action_update = self.create_timer(self.T, self.update_action)
 
     def odom_callback(self, msg):
@@ -122,26 +123,19 @@ class ActionFollower(Node):
 
     def action_callback(self, msg):
         self.actions = deque(np.array(msg.data).reshape([dim.size for dim in msg.layout.dim]))
-
+        self.actions.append(self.actions[-1])
 
     def control_loop(self):
         self.cmd_vel_pub.publish(self.cmd)
 
-    def update_action(self):
-        # From last observation and current observation, solve for action (diff in position in starting frame)
-        
+    def update_action(self):        
         if self.last_action is not None:
-            #print("EXPECTED: ", get_next_position(self.last_pos, self.last_action))
-            # TODO: Get observation from last action
-            #print("OBSERVATION: ", self.current_config)
-            # TODO: Publish observation and last action
-            obs = self.current_config
             #action = get_action_from_positions(self.last_config, obs)
-            #print("TRUE ACTION: ", action[:3])
+            #tru = "TRUE ACTION: " + str(action[:3])
+            #self.get_logger().warning(tru)
             #self.last_config = copy.deepcopy(obs)
-            #print("ACTION: ", self.last_action[:3])
-            #print("ACT: ", len(self.last_action))
-            #print("OBS: ", len(obs))
+            #hyp = "ACTION: " + str(self.last_action[:3])
+            #self.get_logger().warning(hyp)
 
             msg = Float64MultiArray()
 
@@ -159,19 +153,20 @@ class ActionFollower(Node):
             msg.layout.data_offset = 0
 
             data = list(self.last_action)
+            obs = self.current_config
             data.extend(obs)
             msg.data = data
 
             self.act_obs_pub.publish(msg)
 
-            #rr.log("Micro_Observation", rr.Arrows3D(origins=list(self.current_config[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 1.0]))
-
-        if len(self.actions) == 0:
-            self.last_action = None
+        if len(self.actions) <= 1:
+            if len(self.actions) == 1:
+                self.last_action = self.actions.popleft()
+            else:
+                self.last_action = None
             cmd = Twist()
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
-            #self.cmd_vel_pub.publish(cmd)
             self.cmd = cmd
             return
         
@@ -185,11 +180,7 @@ class ActionFollower(Node):
         cmd.angular.z = 0.0
         if action[0] != 0.0:
             cmd.linear.x = self.V if action[0] > 0.0 else -self.V
-            cmd.angular.z = (1/0.045)*action[2] / self.T
-        #self.get_logger().info("PUB TWIST")
-        #print("LINEAR V: ", cmd.linear.x)
-        #print("ANGULAR V: ", cmd.angular.z)
-        #self.cmd_vel_pub.publish(cmd)
+            cmd.angular.z = action[2] / self.T #(1/0.045)
         self.cmd = cmd
 
         # TODO: Set and publish the joint commands for this action

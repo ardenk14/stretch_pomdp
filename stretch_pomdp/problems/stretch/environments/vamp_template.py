@@ -36,12 +36,13 @@ class VAMPEnv():
         # Customize objects.
         # ====================================================
         # Assumes a single spherical goal region.
-        self._goal = (1.0, [1.0, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self._goal = (1.0, [2.0, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
 
         self._landmarks = [
-            [[1, 1, 1], [0.5, 0.75, 0.0], [0, 0, 0]],
-            [[1, 1, 1], [0.5, -0.5, 0.0], [0, 0, 0]],
-            [[1, 1, 1], [1.0, 0.5, 0.0], [0, 0, 0]],
+            [[1, 1, 1], [2.0, 0.0, 0.0], [0, 0, 0]]
+            #[[1, 1, 1], [0.5, 0.75, 0.0], [0, 0, 0]],
+            #[[1, 1, 1], [0.5, -0.5, 0.0], [0, 0, 0]],
+            #[[1, 1, 1], [1.0, 0.5, 0.0], [0, 0, 0]],
         ]
 
         self._danger_zones = [
@@ -52,7 +53,9 @@ class VAMPEnv():
         ]
 
         self.cuboids = []
-        self.spheres = [(0.25, (0.5, 0.25, 0.25))]
+        self.spheres = [(0.5, (1.0, 0.0, 0.5)),
+                        #(0.5, (1.0, 0-.25, 0.25))
+                        ]
         self.heightfields = []
         self.cylinders = []
         self.capsules = []
@@ -81,8 +84,12 @@ class VAMPEnv():
 
     def visualize_key_features(self):
         """Customize to add key objects (e.g. danger zones, landmarks, goal, starting regions) to the GUI."""
+        centers = []
+        radii = []
         for radius, center in self.spheres:
-            rr.log("Obstacles", rr.Points3D(center, radii=[radius]), static=True)
+            centers.append(center)
+            radii.append(radius)
+        rr.log("Obstacles", rr.Points3D(centers, radii=radii), static=True)
 
     def get_landmarks_pos(self, include_goal=True):
         lms = [lm[1] + [0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0] for lm in self._landmarks]

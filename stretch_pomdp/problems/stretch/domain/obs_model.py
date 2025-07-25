@@ -20,12 +20,11 @@ def normal_log_prob(x, mean, std):
 
 class StretchObservationModel(ObservationModel):
     """
-    The navigation observation model. It returns a noisy reading when the
-    agent is in light otherwise no readings at all.
+    The navigation observation model.
     """
     def __init__(self, vamp_env):
         self._vamp_env = vamp_env
-        self.obs_noise = 0.05#0.2
+        self.obs_noise = 0.1#0.2
 
     def probability(self, observation: Observation, next_state: State, action: Action):
         """

@@ -46,7 +46,7 @@ class StretchTransitionModel(TransitionModel):
             return state
 
         realised_action = random.choices([Action("None"), action], weights=[0.005, 0.995])[0] # TODO: Add randomness (action.sample())
-        realised_action = Action(realised_action._name, v_noise = np.random.normal(0, 0.01), w_noise = np.random.normal(0, 0.02))
+        realised_action = Action(realised_action._name, v_noise = np.random.normal(0, 0.05), w_noise = np.random.normal(0, 0.03))
         #state_pos = np.array(list(state.get_position) + [0., 0.])
         next_position = self.move_if_valid_next_position(state.get_position, realised_action)
 

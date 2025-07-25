@@ -66,7 +66,8 @@ class POMDPManager(Node):
         super().__init__('vamp_manager')
 
         rr.init("rerun_example_my_data", spawn=False)
-        rr.serve_web(server_memory_limit='0.00%')
+        rr.serve_web(open_browser=True, server_memory_limit='0.00%')
+        #rr.serve_web(server_memory_limit='0.00%')
 
         # Subscribe to Pointcloud and primitives in the environment
         self.sub = self.create_subscription(
@@ -119,7 +120,7 @@ class POMDPManager(Node):
         self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
 
         self.planner = pomdp_py.RefPOMDPFast(
-                    planning_time=10,
+                    planning_time=2,
                     exploration_const=0.0,
                     discount_factor=.99,
                     eta=.2,
@@ -130,7 +131,7 @@ class POMDPManager(Node):
                     use_prm=False)
 
         # Create timer for control loop
-        self.timer = self.create_timer(60.0, self.control_loop)  # 1Hz control loop
+        self.timer = self.create_timer(12.0, self.control_loop)  # 1Hz control loop
         self.control_loop()
 
     def odom_callback(self, msg):
@@ -302,6 +303,7 @@ class POMDPManager(Node):
                         colors.append(color)
 
         print("TREE SIZE: ", size)
+        #rr.log("Tree", rr.Clear(recursive=False))
         rr.log("Tree", rr.Arrows3D(origins=origins, vectors=vectors, colors=colors))
 
         # Visualize actions to be taken
