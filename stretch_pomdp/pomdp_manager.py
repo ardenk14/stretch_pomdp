@@ -24,6 +24,7 @@ from stretch_pomdp.problems.stretch.domain.observation import Observation
 from stretch_pomdp.problems.stretch.domain.action import Action
 from stretch_pomdp.problems.stretch.domain.state import State
 from stretch_pomdp.problems.stretch.domain.action import MacroAction
+from stretch_pomdp.problems.stretch.domain.transition_model import StretchTransitionModel
 from stretch_pomdp.problems.stretch.environments.vamp_template import VAMPEnv
 #from pomdp_py.framework.basics import MPPOMDP, sample_explicit_models
 from pomdp_py.framework.basics import MacroObservation
@@ -33,32 +34,6 @@ from std_msgs.msg import MultiArrayDimension, MultiArrayLayout
 import rerun as rr
 from collections import deque
 import copy
-
-def get_next_position(position, action):
-    """
-    Transition function for the navigation model.
-
-    :param position: agent current position (x, y, yaw, ...) in world frame.
-    :param action: action in the robot's frame (dx, dy, dyaw, ...)
-                where dx is forward, dy is left, and dyaw is rotation.
-    :return: the next position in the world frame.
-    """
-    next_position = np.zeros_like(position)
-    x, y, yaw = position[0], position[1], position[2]
-
-    dx_body = action[0]
-    dy_body = action[1]
-    dyaw = action[2]
-
-    dx_world = dx_body * np.cos(yaw) - dy_body * np.sin(yaw)
-    dy_world = dx_body * np.sin(yaw) + dy_body * np.cos(yaw)
-
-    next_position[0] = x + dx_world
-    next_position[1] = y + dy_world
-    next_position[2] = yaw + dyaw
-    next_position[3:] = position[3:] + action[3:]
-
-    return next_position
 
 
 class POMDPManager(Node):
@@ -101,7 +76,7 @@ class POMDPManager(Node):
 
         self.lock = threading.Lock()
 
-        self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0.])
+        self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.obs_lst = []
         self.acts_lst = []
         self.current_trajectory = None
@@ -117,6 +92,7 @@ class POMDPManager(Node):
         self.last_action = None
 
         self.vamp_env = VAMPEnv()
+        self._Tm = StretchTransitionModel(self.vamp_env)
         self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
 
         self.planner = pomdp_py.RefPOMDPFast(
@@ -311,8 +287,8 @@ class POMDPManager(Node):
         origins = []
         vectors = []
         for act in action.action_sequence:
-            act = act._motion
-            next_position = get_next_position(position, act)
+            #act = act._motion
+            next_position = self._Tm.get_next_position(position, act)
             origins.append(position[:3])
             vectors.append(next_position[:3] - position[:3])
             origins[-1][-1] = 0.05

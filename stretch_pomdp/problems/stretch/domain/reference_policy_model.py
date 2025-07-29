@@ -18,7 +18,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                  visual_shortest_path: bool = False,
                  finite_ref_actions: bool = True):
         #print(f"restrict ref actions: {finite_ref_actions}")
-        self.ACTIONS = [Action(i) for i in Action("Forward").MOTIONS.keys()]
+        self.ACTIONS = [Action(i) for i in Action("F").MOTIONS.keys()]
         self._vamp_env = vamp_env
         self._Tm = StretchTransitionModel(vamp_env)
         self._Om = StretchObservationModel(vamp_env)
@@ -47,7 +47,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 sampled_lm = list(np.random.uniform(state.LOWER_BOUNDS, state.UPPER_BOUNDS)) # TODO: Fix this
                 #print("SAMPLED LM: ", len(sampled_lm))
                 if not self._vamp_env.collision_checker(sampled_lm):
-                    state_pos = list(state.get_position) + [0., 0.]
+                    state_pos = list(state.get_position)[:11] + [0., 0.]
                     path = self._path_planner.shortest_path(state_pos, list(np.array(sampled_lm)))[:self.max_nodes]
                     return self.path_to_macro_action(path)
         else:
@@ -79,7 +79,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             else:
                 sampled_lm = lm_pos[np.random.choice(len(lm_pos)-1)]
 
-        state_pos = list(state.get_position) + [0., 0.]
+        state_pos = list(state.get_position)[:11] + [0., 0.]
 
         # Generate the shortest path from the sampled state to the landmark
         path = self._path_planner.shortest_path(state_pos, np.array(sampled_lm))[:self.max_nodes]
@@ -192,7 +192,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
     # print("sampled_lm = {}".format(sampled_lm))
 
-        state_pos = list(state.get_position) + [0., 0.]
+        state_pos = list(state.get_position)[:11] + [0., 0.]
         #print("SAMPLED LM: ", sampled_lm)
         #print("STATE: ", state_pos)
         path = self._path_planner.shortest_path(state_pos, list(np.array(sampled_lm)))[:self.max_nodes]
@@ -202,6 +202,24 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
         return self.path_to_macro_action(path)
 
+    def path_to_macro_action(self, state, path):
+        """
+        :param path: A list of position nodes lead from start path[0] to goal path[-1]
+        :return: A list of macro actions that best approximate the path
+        """  
+
+        actions = []
+
+        while len(actions) < self.max_nodes:
+            # Check each action rollout against path
+            best_action = Action("None")
+            for action in self.ACTIONS:
+                new_state = self._Tm.get_next_position(state, action)
+                # If action not "None" and new_position == old_position it's in contact (don't select this action)
+                # Otherwise, check against each edge in the graph
+                # If score is better than best_action, save as new best_action, with edge it is closest to
+            # Add best action, remove edges before closest edge, replace closest edge with new edge (current pos to next)
+
     def path_to_macro_action(self, path):
         """
         :param path: A list of position nodes lead from start path[0] to goal path[-1]
@@ -210,32 +228,6 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
         if len(path) < 2:
             return(MacroAction([]))       
-        
-        def get_next_position(position, action):
-            """
-            Transition function for the navigation model.
-
-            :param position: agent current position (x, y, yaw, ...) in world frame.
-            :param action: action in the robot's frame (dx, dy, dyaw, ...)
-                        where dx is forward, dy is left, and dyaw is rotation.
-            :return: the next position in the world frame.
-            """
-            next_position = np.zeros_like(position)
-            x, y, yaw = position[0], position[1], position[2]
-
-            dx_body = action[0]
-            dy_body = action[1]
-            dyaw = action[2]
-
-            dx_world = dx_body * np.cos(yaw) - dy_body * np.sin(yaw)
-            dy_world = dx_body * np.sin(yaw) + dy_body * np.cos(yaw)
-
-            next_position[0] = x + dx_world
-            next_position[1] = y + dy_world
-            next_position[2] = yaw + dyaw
-            next_position[3:] = position[3:] + action[3:]
-
-            return next_position
         
         actions = []
 
@@ -251,12 +243,12 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             #print("NEXT: ", next_node.shape)
 
             action = min(self.ACTIONS,
-                     key=lambda a: np.linalg.norm(next_node[:2] - get_next_position(node, np.array(list(a._motion)+[0., 0.]))[:2]))
+                     key=lambda a: np.linalg.norm(next_node[:2] - self._Tm.get_next_position(node, a)[:2]))
             if action._name == "None":
                 continue
             actions.append(action)
 
-            nd = get_next_position(nd, np.array(list(action._motion)+[0.0, 0.0]))
+            nd = self._Tm.get_next_position(nd, np.array(list(action._motion)+[0.0, 0.0]))
             nds.append(nd)
 
             #print("NODE: ", node)
