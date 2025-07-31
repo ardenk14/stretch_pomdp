@@ -6,6 +6,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Header
 from rclpy.duration import Duration
 import threading
+from rclpy.time import Time
 
 from nav_msgs.msg import Path, Odometry
 from geometry_msgs.msg import Twist, PoseStamped, Point
@@ -90,6 +91,9 @@ class POMDPManager(Node):
         self.danger_zones = []
 
         self.last_action = None
+        self.last_v = 0.0
+        self.last_w = 0.0
+        self.last_t = None
 
         self.vamp_env = VAMPEnv()
         self._Tm = StretchTransitionModel(self.vamp_env)
@@ -107,7 +111,7 @@ class POMDPManager(Node):
                     use_prm=False)
 
         # Create timer for control loop
-        self.timer = self.create_timer(12.0, self.control_loop)  # 1Hz control loop
+        self.timer = self.create_timer(20.0, self.control_loop)  # 1Hz control loop
         self.control_loop()
 
     def odom_callback(self, msg):
@@ -125,14 +129,30 @@ class POMDPManager(Node):
         self.current_config[2] = quaternion_to_yaw(current_pose.orientation)
         rr.log("Current_Pos", rr.Arrows3D(origins=list(self.current_config[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 0.2]))
 
+        v = msg.twist.twist.linear.x
+        w = msg.twist.twist.angular.z
+        t = Time.from_msg(msg.header.stamp)
+
+        #print(msg.header.stamp)
+        if self.last_t is not None:
+            diff = (t - self.last_t).nanoseconds * 1e-9
+            #print("LINEAR ACCEL: ", (v - self.last_v) / diff)
+            #print("ANGULAR ACCEL: ",(w - self.last_w) / diff)
+
+        self.last_v = v
+        self.last_w = w
+        self.last_t = t
+
     def act_obs_callback(self, msg):
         flat_data = msg.data
-        action = flat_data[0:11]
-        observation = flat_data[11:2*11]
+        act_len = len(Action("None")._motion)
+        action = flat_data[:act_len]
+        observation = flat_data[act_len:]
         act = Action("None")
         for k, v in act.MOTIONS.items():
             if list(v) == list(action):
                 act = Action(k)
+        print(act)
         if act._name != "None":
             self.lock.acquire()
             self.obs_lst.append(Observation(observation))

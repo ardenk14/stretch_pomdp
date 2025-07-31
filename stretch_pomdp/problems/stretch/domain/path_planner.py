@@ -43,9 +43,12 @@ class PathPlanner:
         path = [s.to_list()[:2]+[0.0] for s in simple.path]
         src = source[:2] + [0.0]
         trgt = target[:2] + [0.0]
+        #print("PATH: ", path)
+        #print("SRC: ", src)
+        #print("TRGT: ", trgt)
         rr.log("VAMP", rr.LineStrips3D(path))#, rr.Points3D([src, trgt]))
 
-        simple.path.interpolate(vamp.stretch.resolution())
+        #simple.path.interpolate(vamp.stretch.resolution())
 
         return [s.to_list() for s in simple.path]
 

@@ -3,6 +3,9 @@ from pomdp_py.framework.basics import TransitionModel
 from stretch_pomdp.problems.stretch.domain.action import Action
 from stretch_pomdp.problems.stretch.domain.state import State
 import numpy as np
+import math
+
+import rerun as rr
 
 np.set_printoptions(precision=3, suppress=True)  # for neat printing of numpy arrays.
 np_generator = np.random.default_rng()
@@ -13,29 +16,60 @@ class StretchTransitionModel(TransitionModel):
     def __init__(self, vamp_env):
         self._vamp_env = vamp_env
         self.ACTIONS = [Action(i) for i in Action("F").MOTIONS.keys()]
+        self.a = 0.12
+        self.max_v = 0.3
 
-        self.av = 0.12
-        self.aw = 0.12
+    def next(self, v0, w0, v_goal, w_goal, theta_start, T, dt=0.02):
+        x, y, theta = 0.0, 0.0, theta_start
+        L = 0.3196581671875644
 
-    # First segment: Accelerating motion
-    def integrate_motion(self, v0, w0, a_v, a_w, theta0, t):
-        # Heading: theta(t) = theta0 + w0*t + 0.5*a_w*t^2
-        theta_t = theta0 + w0 * t + 0.5 * a_w * t**2
-        # Use linearized closed form
-        epsilon = 1e-6
-        w0_ = w0 if abs(w0) > epsilon else epsilon
+        t = 0.0
+        while t < T:
 
-        dx = (v0 / w0_) * (np.sin(theta0 + w0_ * t) - np.sin(theta0)) \
-        + (a_v / w0_**2) * (np.cos(theta0 + w0_ * t) - np.cos(theta0)) \
-        + (a_v * t / w0_) * np.sin(theta0 + w0_ * t)
+            # Get current linear velocity for each wheel
+            vr = v0 + (w0*L)/2.0
+            vr = np.sign(vr) * min(abs(vr), self.max_v)
+            vl = v0 - (w0*L)/2.0
+            vl = np.sign(vl) * min(abs(vl), self.max_v)
 
-        dy = -(v0 / w0_) * (np.cos(theta0 + w0_ * t) - np.cos(theta0)) \
-        + (a_v / w0_**2) * (np.sin(theta0 + w0_ * t) - np.sin(theta0)) \
-        - (a_v * t / w0_) * np.cos(theta0 + w0_ * t)
+            # Get goal velocity for each wheel (with velocity limits)
+            vrg = v_goal + (w_goal*L)/2.0
+            vrg = np.sign(vrg) * min(abs(vrg), self.max_v)
+            vlg = v_goal - (w_goal*L)/2.0
+            vlg = np.sign(vlg) * min(abs(vlg), self.max_v)
 
-        dtheta = w0 * t + 0.5 * a_w * t**2
+            # Accelerate the right wheel according to trapezoidal motion profile (constant acceleration)
+            if vr < vrg:
+                vr = min(vr + self.a * dt, vrg)
+            elif vr > vrg:
+                vr = max(vr - self.a * dt, vrg)
 
-        return dx, dy, dtheta, v0 + a_v * t, w0 + a_w * t, theta_t
+            # Accelerate the left wheel according to trapezoidal motion profile (constant acceleration)
+            if vl < vlg:
+                vl = min(vl + self.a * dt, vlg)
+            elif vl > vlg:
+                vl = max(vl - self.a * dt, vlg)
+
+            # Calculate actual linear and angular velocities given vel limits for each wheel
+            v0 = (vr + vl) / 2.0
+            w0 = (vr - vl) / L
+
+            # If no acceleration, we have a closed form solution and end integration in one step here
+            if vl == vlg and vr == vrg:
+                dx, dy, dtheta = self.constant_velocity_motion(v0, w0, theta, T - t)
+                theta = (theta + dtheta + math.pi) % (2 * math.pi) - math.pi
+                return x+dx, y+dy, theta, v0, w0
+
+            # Update position
+            x += v0 * math.cos(theta) * dt
+            y += v0 * math.sin(theta) * dt
+            theta += w0 * dt
+
+            # Normalize final heading
+            theta = (theta + math.pi) % (2 * math.pi) - math.pi
+
+            t += dt
+        return x, y, theta, v0, w0
 
     # Second segment: Constant velocity motion
     def constant_velocity_motion(self, v, w, theta_start, t):
@@ -51,97 +85,36 @@ class StretchTransitionModel(TransitionModel):
         return dx, dy, dtheta
 
     def move_if_valid_next_position(self, position, action):
-        x0, y0, theta0, v0, w0 = position[0], position[1], position[2], position[11], position[12]
-        v, w = action._motion[0], action._motion[1]
-        T = action.T
-
-        #print("T: ", T)
-        #print("V: ", v)
-        #print("V0: ", v0)
-        #print("W: ", w)
-        #print("W0: ", w0)
-
-        if abs(v - v0) > 0.03:
-            av = self.av * np.sign(v - v0)
-            tv = min(abs((v - v0) / av), T)
-        else:
-            av = 0.0
-            tv = T
-
-        if abs(w - w0) > 0.03:
-            aw = self.aw * np.sign(w - w0)
-            tw = min(abs((w - w0) / aw), T)
-        else:
-            aw = 0.0
-            tw = T
-
-        # Determine acceleration directions (and if acceleration is necessary)
-        #av = self.av * np.sign(v - v0) if abs(v-v0) > 0.03 else 0.0
-        #aw = self.aw * np.sign(w - w0) if abs(w-w0) > 0.03 else 0.0
-
-        # Time needed to reach desired v and w
-        #tv = min(abs((v - v0) / av) if abs(v - v0) > 0.03 else T, T)
-        #tw = min(abs((w - w0) / aw) if abs(w - w0) > 0.03 else T, T)
-
-        # Time spent accelerating (may be partial)
-        #print("AV: ", av)
-        #print("AW: ", aw)
-        #print("TV: ", tv)
-        #print("TW: ", tw)
-        t1 = min(tv, tw)
-        t2 = tv-tw if tv > tw else tw-tv
-        t3 = T - (t2 + t1)
-
-        dx1, dy1, dtheta1, v1, w1, theta1 = self.integrate_motion(v0, w0, av, aw, theta0, t1)
-        av = self.av * np.sign(v - v1)# if abs(v-v1) > 0.03 else 0.0
-        aw = self.aw * np.sign(w - w1)# if abs(w-w1) > 0.03 else 0.0
-        dx2, dy2, dtheta2, v2, w2, theta2 = self.integrate_motion(v1, w1, av, aw, theta1, t2)
-        dx3, dy3, dtheta3 = self.constant_velocity_motion(v2, w2, theta2, t3)
-
-        # Total change
-        dx = dx1 + dx2 + dx3
-        dy = dy1 + dy2 + dy3
-        dtheta = dtheta1 + dtheta2 + dtheta3
-
-        next_position = np.zeros_like(position)
-        next_position[0] = x0 + dx
-        next_position[1] = y0 + dy
-        next_position[2] = theta0 + dtheta
-        next_position[11] = v2 if t3 <= 0.0 else v  # if not enough time, we didn't reach v
-        next_position[12] = w2 if t3 <= 0.0 else w
-
-        if self._vamp_env.collision_checker(list(next_position)[:11] + [0., 0.]):
-            return position
-        return next_position
-
-    def get_next_position(self, position, action):
-        return self.move_if_valid_next_position(position, action)
-    
-    #def move_if_valid_next_position(self, position, action):
         """
         Transition function for the navigation model.
         :param position: agent current position (x,y,z, roll, pitch, yaw)
         :param action: The action to take.
         :return: The next state under environment constraints.
         """
-        """action = action._motion
+        x0, y0, theta0, v0, w0 = position[0], position[1], position[2], position[11], position[12]
+        v, w = action._motion[0], action._motion[1]
+        T = action.T
+
+        dx, dy, theta, v, w = self.next(v0, w0, v, w, theta0, T)
+
         next_position = np.zeros_like(position)
-        x, y, yaw = position[0], position[1], position[2]
+        next_position[0] = x0 + dx
+        next_position[1] = y0 + dy
+        next_position[2] = theta
+        next_position[3:11] = position[3:11]
+        next_position[3] = 0.5
+        next_position[11] = v
+        next_position[12] = w
 
-        dx_body = action[0] # (v*t + 0.5*self.av*t**2)*np.cos(yaw)
-        dy_body = action[1]
-        dyaw = action[2]
+        #if self._vamp_env.collision_checker(list(next_position)[:11] + [0., 0.]):
+        #    #print("COLLISION! ", list(next_position)[:11] + [0., 0.])
+        #    #print("COLLISION! ", list(position))#[:11] + [0., 0.])
+        #    #raise ValueError("AHHHHHH")
+        #    return position
+        return next_position
 
-        dx_world = dx_body * np.cos(yaw) - dy_body * np.sin(yaw)
-        dy_world = dx_body * np.sin(yaw) + dy_body * np.cos(yaw)
-
-        next_position[0] = x + dx_world
-        next_position[1] = y + dy_world
-        next_position[2] = yaw + dyaw
-        next_position[3:] = position[3:] + action[3:]
-        if self._vamp_env.collision_checker(list(next_position) +[0., 0.]):
-            return position
-        return next_position"""
+    def get_next_position(self, position, action):
+        return self.move_if_valid_next_position(position, action)
 
     def sample(self, state: State, action: Action):
 
@@ -149,9 +122,7 @@ class StretchTransitionModel(TransitionModel):
             return state
 
         realized_action = action
-        #realised_action = random.choices([Action("None"), action], weights=[0.005, 0.995])[0] # TODO: Add randomness (action.sample())
-        #realised_action = Action(realised_action._name, v_noise = np.random.normal(0, 0.05), w_noise = np.random.normal(0, 0.03))
-        #state_pos = np.array(list(state.get_position) + [0., 0.])
+        realized_action = Action(realized_action._name, v_noise = np.random.normal(0, 0.03), w_noise = np.random.normal(0, 0.07))
         next_position = self.move_if_valid_next_position(state.get_position, realized_action)
 
         return State(next_position,

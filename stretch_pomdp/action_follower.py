@@ -9,6 +9,8 @@ import math
 from collections import deque
 import copy
 
+from rclpy.time import Time
+import matplotlib.pyplot as plt
 import rerun as rr
 
 def get_next_position(position, action):
@@ -91,6 +93,11 @@ class ActionFollower(Node):
         cmd.angular.z = 0.0
         self.cmd = cmd
 
+        self.vs = []
+        self.ws = []
+        self.ts = []
+        self.start_t = None
+
         # Subscribe to actions and odometry
         self.actions_sub = self.create_subscription(
             Float64MultiArray, 'actions', self.action_callback, 10
@@ -121,12 +128,37 @@ class ActionFollower(Node):
         self.current_config[1] = current_pose.position.y
         self.current_config[2] = quaternion_to_yaw(current_pose.orientation)
 
+        v = msg.twist.twist.linear.x
+        w = msg.twist.twist.angular.z
+        t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
+
+        self.vs.append(v)
+        self.ws.append(w)
+        if self.start_t is not None:
+            self.ts.append(t - self.start_t)
+        else:
+            self.ts.append(0.0)
+            self.start_t = t
+
+        #print("LIN VEL: ", v)
+        #print("ANG VEL: ", w)
+        #print("T: ", t)
+
     def action_callback(self, msg):
         self.actions = deque(np.array(msg.data).reshape([dim.size for dim in msg.layout.dim]))
-        self.actions.append(self.actions[-1])
+        #self.actions.append(self.actions[-1])
 
     def control_loop(self):
-        self.cmd_vel_pub.publish(self.cmd)
+        if len(self.ts) > 0 and self.ts[-1] < 3.0:
+            cmd = Twist()
+            cmd.linear.x = 0.3
+            cmd.angular.z = 0.5
+        else:
+            cmd = Twist()
+            cmd.linear.x = 0.3
+            cmd.angular.z = -0.5
+        self.cmd_vel_pub.publish(cmd)
+        #self.cmd_vel_pub.publish(self.cmd)
 
     def update_action(self):        
         if self.last_action is not None:
@@ -136,8 +168,25 @@ class ActionFollower(Node):
             #self.last_config = copy.deepcopy(obs)
             #hyp = "ACTION: " + str(self.last_action[:3])
             #self.get_logger().warning(hyp)
-
             msg = Float64MultiArray()
+
+            action = list(self.last_action)
+            obs = list(self.current_config)
+            data = action + obs
+
+            # You could encode size info in dim labels or encode them separately elsewhere
+            dim = MultiArrayDimension()
+            dim.label = "flat"   # single dimension
+            dim.size = len(data)
+            dim.stride = len(data)
+
+            msg.layout.dim = [dim]
+            msg.layout.data_offset = 0
+            msg.data = data
+
+            self.act_obs_pub.publish(msg)
+
+            """msg = Float64MultiArray()
 
             dim1 = MultiArrayDimension()
             dim1.label = "rows"
@@ -157,13 +206,14 @@ class ActionFollower(Node):
             data.extend(obs)
             msg.data = data
 
-            self.act_obs_pub.publish(msg)
+            self.act_obs_pub.publish(msg)"""
 
-        if len(self.actions) <= 1:
-            if len(self.actions) == 1:
-                self.last_action = self.actions.popleft()
-            else:
-                self.last_action = None
+        if len(self.actions) < 1:
+            #if len(self.actions) == 1:
+            #    self.last_action = self.actions.popleft()
+            #else:
+            #    self.last_action = None
+            self.last_action = None
             cmd = Twist()
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
@@ -179,8 +229,8 @@ class ActionFollower(Node):
         cmd.linear.x = 0.0
         cmd.angular.z = 0.0
         if action[0] != 0.0:
-            cmd.linear.x = self.V if action[0] > 0.0 else -self.V
-            cmd.angular.z = action[2] / self.T #(1/0.045)
+            cmd.linear.x = action[0]#self.V if action[0] > 0.0 else -self.V
+            cmd.angular.z = action[1]#action[2] / self.T #(1/0.045)
         self.cmd = cmd
 
         # TODO: Set and publish the joint commands for this action
@@ -196,6 +246,9 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        plt.scatter(follower_node.ts, follower_node.ws)
+        plt.scatter(follower_node.ts, follower_node.vs)
+        plt.show()
         follower_node.destroy_node()
         rclpy.shutdown()
 

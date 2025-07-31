@@ -7,6 +7,7 @@ from stretch_pomdp.problems.stretch.domain.action import Action, MacroAction
 from stretch_pomdp.problems.stretch.domain.state import State
 import stretch_pomdp.problems.stretch.domain.path_planner as pp
 import numpy as np
+import math
 
 import rerun as rr
 
@@ -24,7 +25,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         self._Om = StretchObservationModel(vamp_env)
         self._path_planner = pp.PathPlanner(vamp_env)
         self._visual_shortest_path = visual_shortest_path
-        self.max_nodes = 20 + 1
+        self.max_nodes = 8
         self.finite_ref_actions = finite_ref_actions
         self.all_ref_actions = []
         # pre-fill the reference actions with primitive ones
@@ -49,7 +50,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 if not self._vamp_env.collision_checker(sampled_lm):
                     state_pos = list(state.get_position)[:11] + [0., 0.]
                     path = self._path_planner.shortest_path(state_pos, list(np.array(sampled_lm)))[:self.max_nodes]
-                    return self.path_to_macro_action(path)
+                    return self.path_to_macro_action(state, path)
         else:
             if heuristics == "entropy":
                 return self.dynamic_entropy_sample(state, h)
@@ -87,7 +88,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         # TODO: refine the approximation using continuous actions representation instead of discrete ones
         if len(path) < 2:
             return MacroAction([])
-        return self.path_to_macro_action(path)
+        return self.path_to_macro_action(state, path)
 
     def diversity_sample(self, state: State):
         """
@@ -103,7 +104,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             sampled_lm = self._vamp_env.sample_landmark_zones(np.random.choice(self._vamp_env.get_num_lms))
         # Generate the shortest path from the sampled state to the landmark
         path = self._path_planner.shortest_path(state.get_position, np.array(sampled_lm))[:self.max_nodes]
-        return self.path_to_macro_action(path)
+        return self.path_to_macro_action(state, path)
 
     def weighted_distance_sample(self, state: State):
         """
@@ -130,7 +131,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         path = self._path_planner.shortest_path(state.get_position, np.array(sampled_lm))[:self.max_nodes]
         if len(path) < 2:
             return MacroAction([])
-        return self.path_to_macro_action(path)
+        return self.path_to_macro_action(state, path)
 
     def weighted_distance_diversity_sample(self, state: State):
         # sample milestones (landmarks) TODO: implement different milestone sampling heuristic
@@ -153,7 +154,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         path = self._path_planner.shortest_path(state.get_position, np.array(sampled_lm))[:self.max_nodes]
         if len(path) < 2:
             return MacroAction([])
-        return self.path_to_macro_action(path)
+        return self.path_to_macro_action(state, path)
 
     def prm_path_sampling(self, state: State, interp_gap=0.5):
         """
@@ -190,8 +191,6 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         sampled_idx = np.random.choice(len(lm_pos), p=w)
         sampled_lm = lm_pos[sampled_idx]
 
-    # print("sampled_lm = {}".format(sampled_lm))
-
         state_pos = list(state.get_position)[:11] + [0., 0.]
         #print("SAMPLED LM: ", sampled_lm)
         #print("STATE: ", state_pos)
@@ -200,72 +199,117 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         if len(path) < 2:
             return MacroAction([])
 
-        return self.path_to_macro_action(path)
+        return self.path_to_macro_action(state, path)
 
     def path_to_macro_action(self, state, path):
         """
-        :param path: A list of position nodes lead from start path[0] to goal path[-1]
+        :param state: The starting state (position)
+        :param path: A list of position nodes leading from path[0] (start) to path[-1] (goal)
         :return: A list of macro actions that best approximate the path
-        """  
-
-        actions = []
-
-        while len(actions) < self.max_nodes:
-            # Check each action rollout against path
-            best_action = Action("None")
-            for action in self.ACTIONS:
-                new_state = self._Tm.get_next_position(state, action)
-                # If action not "None" and new_position == old_position it's in contact (don't select this action)
-                # Otherwise, check against each edge in the graph
-                # If score is better than best_action, save as new best_action, with edge it is closest to
-            # Add best action, remove edges before closest edge, replace closest edge with new edge (current pos to next)
-
-    def path_to_macro_action(self, path):
         """
-        :param path: A list of position nodes lead from start path[0] to goal path[-1]
-        :return: A list of macro actions that best approximate the path
-        """ 
+
+        def get_lookahead_point(path, current_pos, lookahead_dist):
+            """Find a point on the path ~lookahead_dist ahead of current_pos."""
+            pos = np.array(current_pos[:2])
+    
+            for i in range(len(path) - 1):
+                a = np.array(path[i][:2])
+                b = np.array(path[i+1][:2])
+                ab = b - a
+                ab_len = np.linalg.norm(ab)
+                if ab_len < 1e-6:
+                    continue
+
+                ap = pos - a
+                proj_len = np.clip(np.dot(ap, ab) / ab_len, 0.0, ab_len)
+                closest = a + (proj_len / ab_len) * ab
+                dist_from_robot = np.linalg.norm(closest - pos)
+                remaining = lookahead_dist - dist_from_robot
+
+                if remaining <= ab_len - proj_len:
+                    lookahead = closest + ab * (remaining / ab_len)
+                    yaw = math.atan2(ab[1], ab[0])
+                    return (lookahead[0], lookahead[1], yaw)
+
+            # Fallback to final point
+            end = path[-1]
+            return (end[0], end[1], end[2])
+
+        def angle_diff(a, b):
+            """
+            Smallest difference between angles a and b,
+            treating opposite directions (±π) as equally valid.
+            """
+            a = (a + np.pi) % (2 * np.pi) - np.pi
+            b = (b + np.pi) % (2 * np.pi) - np.pi
+
+            diff1 = abs((a - b + np.pi) % (2 * np.pi) - np.pi)
+            diff2 = abs((a - (b + np.pi) + np.pi) % (2 * np.pi) - np.pi)
+            return min(diff1, diff2)
+
+        def get_cost(pose, lookahead):
+            dx = lookahead[0] - pose[0]
+            dy = lookahead[1] - pose[1]
+            dist_error = math.hypot(dx, dy)
+
+            heading_to_target = math.atan2(dy, dx)
+            heading_error = angle_diff(pose[2], heading_to_target)
+
+            # Weighted cost function
+            cost = 1.0 * dist_error + 0.5 * heading_error# - 0.3 * v
+            return cost
 
         if len(path) < 2:
-            return(MacroAction([]))       
-        
+            return MacroAction([])
+
+        current_pose = state._position  # (x, y, theta)
         actions = []
 
-        #print("PATH START: ", path[0][:3])
-        #print("PATH END: ", path[-1][:3])
-        nd = np.array(path[0])
-        nds = [nd]
-        for i in range(len(path) - 1):
-            node = nd#np.array(path[i])
-            next_node = np.array(path[i + 1])
+        for _ in range(self.max_nodes):
+            lookahead = get_lookahead_point(path, current_pose, 0.5)
+            #lookahead2 = get_lookahead_point(path, current_pose, 0.25)
 
-            #("NODE: ", node.shape)
-            #print("NEXT: ", next_node.shape)
+            best_action = None
+            best_cost = float('inf')
+            best_new_pose = None
 
-            action = min(self.ACTIONS,
-                     key=lambda a: np.linalg.norm(next_node[:2] - self._Tm.get_next_position(node, a)[:2]))
-            if action._name == "None":
-                continue
-            actions.append(action)
+            for action in self.ACTIONS:
+                if action._name == "None":
+                    continue
 
-            nd = self._Tm.get_next_position(nd, np.array(list(action._motion)+[0.0, 0.0]))
-            nds.append(nd)
+                v = action._motion[0]
+                w = action._motion[1]
 
-            #print("NODE: ", node)
-            #print("NEXT NODE: ", next_node)
-            #print("ACTION: ", action)
-            #print("NEXT POS: ", get_next_position(nd, np.array(list(action._motion)+[0.0, 0.0])))
-            #print("MOVE: ", next_node - node)
+                predicted_pose = self._Tm.get_next_position(current_pose, action)
 
-        #print("NODES: ", nds)
-        rr.log("Macro_Actions", rr.LineStrips3D([list(n[:2])+[0.0] for n in nds]))
-        # This code is for rendering the shortest path to the GUI. It substantially slows down the simulations.
-        """if self._visual_shortest_path:
-            for i in range(len(path) - 1):
-                self._vamp_env._sim.addUserDebugLine(lineFromXYZ=path[i][0:3], lineToXYZ=path[i + 1][0:3],
-                                                     lineColorRGB=[0.1, 0.1, 0.1],
-                                                     lineWidth=5., lifeTime=0)"""
-        #print("ACTIONS DECOMPOSED: ", actions)
+                if np.array_equal(predicted_pose, current_pose):
+                    continue
+
+                cost = get_cost(predicted_pose, lookahead) #+ get_cost(predicted_pose, lookahead2)) / 2.0
+
+                if cost < best_cost:
+                    best_cost = cost
+                    best_action = action
+                    best_new_pose = self._Tm.get_next_position(current_pose, action)
+
+            #if best_action is None:
+            #    print("No suitable macro action found. Stopping.")
+            #    break
+
+            if best_action is not None:
+                actions.append(best_action)
+                current_pose = best_new_pose
+
+        if len(actions) == 0:
+            print("NO ACTIONS FOUND FROM POSE: ", state)
+
+        # Visualization
+        nodes = [state._position]
+        for action in actions:
+            nodes.append(self._Tm.get_next_position(nodes[-1], action))
+
+        rr.log("Macro_Actions", rr.LineStrips3D([list(n[:2]) + [0.0] for n in nodes]))
+
         return MacroAction(actions)
 
     def get_all_actions(self, state: State = None, history=None):

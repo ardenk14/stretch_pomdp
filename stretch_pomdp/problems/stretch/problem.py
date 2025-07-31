@@ -17,7 +17,7 @@ def init_stretch_pomdp(init_pos, vamp_env, particle_count=1000, visualize=False)
                 landmark=vamp_env.lm_checker(init_pos),
                 goal=vamp_env.goal_checker(init_pos))]
     for i in range(particle_count):
-        pos = init_pos + np.random.normal(init_pos, [0.01, 0.01, 0.017, 0.002, 0., 0, 0, 0, 0, 0, 0, 0, 0])
+        pos = init_pos + np.random.normal(init_pos, [0.01, 0.01, 0.017, 0.0, 0., 0, 0, 0, 0, 0, 0, 0, 0])
         particles.append(State(pos,
                         danger_zone=vamp_env.dz_checker(pos),
                         landmark=vamp_env.lm_checker(pos),
