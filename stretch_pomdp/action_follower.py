@@ -132,8 +132,14 @@ class ActionFollower(Node):
         w = msg.twist.twist.angular.z
         t = Time.from_msg(msg.header.stamp).nanoseconds * 1e-9
 
-        self.vs.append(v)
-        self.ws.append(w)
+        L = 0.3196581671875644
+        vr = v + (w*L)/2.0
+        #vr = np.sign(vr) * min(abs(vr), self.max_v)
+        vl = v - (w*L)/2.0
+        #vl = np.sign(vl) * min(abs(vl), self.max_v)
+
+        self.vs.append(vr)#v)
+        self.ws.append(vl)#w)
         if self.start_t is not None:
             self.ts.append(t - self.start_t)
         else:
@@ -149,16 +155,16 @@ class ActionFollower(Node):
         #self.actions.append(self.actions[-1])
 
     def control_loop(self):
-        if len(self.ts) > 0 and self.ts[-1] < 3.0:
+        """if len(self.ts) > 0 and self.ts[-1] < 3.0:
             cmd = Twist()
-            cmd.linear.x = 0.3
-            cmd.angular.z = 0.5
+            cmd.linear.x = 0.2
+            cmd.angular.z = 0.2
         else:
             cmd = Twist()
-            cmd.linear.x = 0.3
-            cmd.angular.z = -0.5
-        self.cmd_vel_pub.publish(cmd)
-        #self.cmd_vel_pub.publish(self.cmd)
+            cmd.linear.x = 0.2
+            cmd.angular.z = -0.2
+        self.cmd_vel_pub.publish(cmd)"""
+        self.cmd_vel_pub.publish(self.cmd)
 
     def update_action(self):        
         if self.last_action is not None:

@@ -19,6 +19,11 @@ class StretchTransitionModel(TransitionModel):
         self.a = 0.12
         self.max_v = 0.3
 
+        self.vrs = []
+        self.vls = []
+        self.ts = []
+        self.true_t = 0
+
     def next(self, v0, w0, v_goal, w_goal, theta_start, T, dt=0.02):
         x, y, theta = 0.0, 0.0, theta_start
         L = 0.3196581671875644
@@ -54,21 +59,50 @@ class StretchTransitionModel(TransitionModel):
             v0 = (vr + vl) / 2.0
             w0 = (vr - vl) / L
 
+            self.vrs.append(vr)
+            self.vls.append(vl)
+            self.ts.append(self.true_t)
+
             # If no acceleration, we have a closed form solution and end integration in one step here
-            if vl == vlg and vr == vrg:
-                dx, dy, dtheta = self.constant_velocity_motion(v0, w0, theta, T - t)
-                theta = (theta + dtheta + math.pi) % (2 * math.pi) - math.pi
-                return x+dx, y+dy, theta, v0, w0
+            #if vl == vlg and vr == vrg:
+            #    dx, dy, dtheta = self.constant_velocity_motion(v0, w0, theta, T - t)
+            #    theta = (theta + dtheta + math.pi) % (2 * math.pi) - math.pi
+            #    return x+dx, y+dy, theta, v0, w0
+
+            dl = vl * dt
+            dr = vr * dt
+
+            delta_travel = (dr + dl) / 2.0
+            delta_theta = (dr - dl) / L
+
+            if dl == dr:
+                delta_x = delta_travel * math.cos(theta)
+                delta_y = delta_travel * math.sin(theta)
+            else:
+                # calculate the instantaneous center of curvature (ICC)
+                icc_radius = delta_travel / delta_theta
+                icc_x = x - (icc_radius * math.sin(theta))
+                icc_y = y + (icc_radius * math.cos(theta))
+
+                # calculate the change in position based on the ICC
+                delta_x = ((math.cos(delta_theta) * (x - icc_x))
+                            - (math.sin(delta_theta) * (y - icc_y))
+                            + icc_x - x)
+
+                delta_y = ((math.sin(delta_theta) * (x - icc_x))
+                            + (math.cos(delta_theta) * (y - icc_y))
+                            + icc_y - y)
 
             # Update position
-            x += v0 * math.cos(theta) * dt
-            y += v0 * math.sin(theta) * dt
-            theta += w0 * dt
+            x += delta_x#v0 * math.cos(theta) * dt
+            y += delta_y#v0 * math.sin(theta) * dt
+            theta += delta_theta#w0 * dt
 
             # Normalize final heading
             theta = (theta + math.pi) % (2 * math.pi) - math.pi
 
             t += dt
+            self.true_t += dt
         return x, y, theta, v0, w0
 
     # Second segment: Constant velocity motion
@@ -135,3 +169,15 @@ class StretchTransitionModel(TransitionModel):
 
     def get_handcraft_macro_actions(self, macro_action_size=1):
         return [tuple([a] * macro_action_size) for a in self.ACTIONS]
+
+
+if __name__ == '__main__':
+    model = StretchTransitionModel(None)
+
+    x, y, theta, v, w = model.next(0, 0, 0.2, 0.2, 0.0, 3.0)
+    n = model.next(v, w, 0.2, -0.2, theta, 3.0)
+
+    import matplotlib.pyplot as plt
+    plt.scatter(model.ts, model.vrs)
+    plt.scatter(model.ts, model.vls)
+    plt.show()
