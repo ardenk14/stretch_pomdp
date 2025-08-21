@@ -49,6 +49,6 @@ class StretchObservationModel(ObservationModel):
 
     def sample(self, next_state: State, action: Action):
 
-        reading = next_state.get_position[:3] + np.random.normal(0, self.obs_noise, 3)
+        reading = next_state.get_position[:3]# + np.random.normal(0, self.obs_noise, 3)
 
         return Observation(pos_reading=tuple(reading))

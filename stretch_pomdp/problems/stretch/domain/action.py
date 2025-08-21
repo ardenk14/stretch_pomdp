@@ -59,6 +59,7 @@ class Action(basics.Action):
                         "BR32": (-0.2 + v_noise, 0.3 + w_noise, 0, 0, 0, 0, 0, 0, 0, 0),
                         "BR42": (-0.2 + v_noise, 0.4 + w_noise, 0, 0, 0, 0, 0, 0, 0, 0),
                         "BR52": (-0.2 + v_noise, 0.5 + w_noise, 0, 0, 0, 0, 0, 0, 0, 0),
+                        "F3": (0.3 + v_noise, 0, 0, 0, 0, 0, 0, 0, 0, 0),
                         #F05": (0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"FL105": (0.05, 0.1, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"FL205": (0.05, 0.2, 0, 0, 0, 0, 0, 0, 0, 0),
@@ -86,11 +87,11 @@ class Action(basics.Action):
                         #"TL3": (0, 0.3, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"TL4": (0, 0.4, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"TL5": (0, 0.5, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"TR1": (0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"TR2": (0, 0.2, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"TR3": (0, 0.3, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"TR4": (0, 0.4, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"TR5": (0, 0.5, 0, 0, 0, 0, 0, 0, 0, 0),
+                        #"TR1": (0, -0.1, 0, 0, 0, 0, 0, 0, 0, 0),
+                        #"TR2": (0, -0.2, 0, 0, 0, 0, 0, 0, 0, 0),
+                        #"TR3": (0, -0.3, 0, 0, 0, 0, 0, 0, 0, 0),
+                        #"TR4": (0, -0.4, 0, 0, 0, 0, 0, 0, 0, 0),
+                        #"TR5": (0, -0.5, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"Left_Face": (0, 0, np.pi/2, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"Right_Face": (0, 0, -np.pi/2, 0, 0, 0, 0, 0, 0, 0, 0),
                         #"Slight_Left": (0, 0, np.pi/4, 0, 0, 0, 0, 0, 0, 0, 0),
@@ -112,50 +113,6 @@ class Action(basics.Action):
                         #"Grip_In": (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.1), # Limit -0.35 radians
                         #"Grip_Out": (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.1)} # Limit 0.165 radians
         }
-        """self.MOTIONS = {"None": (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "Forward": (self.T*self.V, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FL1": (self.get_x(0.1+self.W_noise), self.get_y(0.1+self.W_noise), (0.1+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FL2": (self.get_x(0.2+self.W_noise), self.get_y(0.2+self.W_noise), (0.2+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FL3": (self.get_x(0.3+self.W_noise), self.get_y(0.3+self.W_noise), (0.3+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FL4": (self.get_x(0.4+self.W_noise), self.get_y(0.4+self.W_noise), (0.4+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FL5": (self.get_x(0.5+self.W_noise), self.get_y(0.5+self.W_noise), (0.5+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FR1": (self.get_x(-0.1+self.W_noise), self.get_y(-0.1+self.W_noise), (-0.1+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FR2": (self.get_x(-0.2+self.W_noise), self.get_y(-0.2+self.W_noise), (-0.2+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FR3": (self.get_x(-0.3+self.W_noise), self.get_y(-0.3+self.W_noise), (-0.3+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FR4": (self.get_x(-0.4+self.W_noise), self.get_y(-0.4+self.W_noise), (-0.4+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "FR5": (self.get_x(-0.5+self.W_noise), self.get_y(-0.5+self.W_noise), (-0.5+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "Backward": (-self.V*self.T, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BL1": (-self.get_x(0.1+self.W_noise), self.get_y(0.1+self.W_noise), (-0.1+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BL2": (-self.get_x(0.2+self.W_noise), self.get_y(0.2+self.W_noise), (-0.2+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BL3": (-self.get_x(0.3+self.W_noise), self.get_y(0.3+self.W_noise), (-0.3+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BL4": (-self.get_x(0.4+self.W_noise), self.get_y(0.4+self.W_noise), (-0.4+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BL5": (-self.get_x(0.5+self.W_noise), self.get_y(0.5+self.W_noise), (-0.5+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BR1": (-self.get_x(-0.1+self.W_noise), self.get_y(-0.1+self.W_noise), (0.1+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BR2": (-self.get_x(-0.2+self.W_noise), self.get_y(-0.2+self.W_noise), (0.2+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BR3": (-self.get_x(-0.3+self.W_noise), self.get_y(-0.3+self.W_noise), (0.3+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BR4": (-self.get_x(-0.4+self.W_noise), self.get_y(-0.4+self.W_noise), (0.4+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        "BR5": (-self.get_x(-0.5+self.W_noise), self.get_y(-0.5+self.W_noise), (0.5+self.W_noise)*self.T, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"Left_Face": (0, 0, np.pi/2, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"Right_Face": (0, 0, -np.pi/2, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"Slight_Left": (0, 0, np.pi/4, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"Slight_Right": (0, 0, -np.pi/4, 0, 0, 0, 0, 0, 0, 0, 0),
-                        #"Lift_Arm": (0, 0, 0, 0.095, 0, 0, 0, 0, 0, 0, 0), # Limit 1.1 meters
-                        #"Lower_Arm": (0, 0, 0, -0.095, 0, 0, 0, 0, 0, 0, 0), # Limit 0.15 meters
-                        #"Extend_Arm": (0, 0, 0, 0, 0.05, 0, 0, 0, 0, 0, 0), # Limit 0.5 meters
-                        #"Retract_Arm": (0, 0, 0, 0, -0.05, 0, 0, 0, 0, 0, 0), # Limit 0.0 meters
-                        #"Wrist_Clockwise": (0, 0, 0, 0, 0, -0.3, 0, 0, 0, 0, 0), # Limit -1.75 radians
-                        #"Wrist_CounterClockwise": (0, 0, 0, 0, 0, 0.3, 0, 0, 0, 0, 0), # Limit 4.0 radians
-                        #"Wrist_Up": (0, 0, 0, 0, 0, 0, 0.1, 0, 0, 0, 0),
-                        #"Wrist_Down": (0, 0, 0, 0, 0, 0, -0.1, 0, 0, 0, 0),
-                        #"Wrist_Roll_Left": (0, 0, 0, 0, 0, 0, 0, 0.1, 0, 0, 0),
-                        #"Wrist_Roll_Right": (0, 0, 0, 0, 0, 0, 0, -0.1, 0, 0, 0),
-                        #"Head_Clockwise": (0, 0, 0, 0, 0, 0, 0, 0, -0.19, 0, 0), # Limit -2.8 radians
-                        #"Head_CounterClockwise": (0, 0, 0, 0, 0, 0, 0, 0, 0.19, 0, 0), # Limit 2.9 radians
-                        #"Head_Up": (0, 0, 0, 0, 0, 0, 0, 0, 0, 0.1, 0), # Limit 0.4 radians
-                        #"Head_Down": (0, 0, 0, 0, 0, 0, 0, 0, 0, -0.1, 0), # Limit -1.6 radians
-                        #"Grip_In": (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.1), # Limit -0.35 radians
-                        #"Grip_Out": (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.1)} # Limit 0.165 radians
-        }"""
 
         if name not in self.MOTIONS.keys():
             raise ValueError(f"Invalid action name: {name}")

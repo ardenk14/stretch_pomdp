@@ -99,16 +99,26 @@ class POMDPManager(Node):
         self._Tm = StretchTransitionModel(self.vamp_env)
         self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
 
-        self.planner = pomdp_py.RefPOMDPFast(
-                    planning_time=2,
-                    exploration_const=0.0,
-                    discount_factor=.99,
-                    eta=.2,
-                    max_depth=100,
-                    rollout_depth=450,
-                    #episode_count=-1,
-                    ref_policy_heuristic='uniform',
-                    use_prm=False)
+        self.planner = pomdp_py.ROPRAS3(
+            planning_time=2,
+            max_depth=100,
+            rollout_depth=450,
+            eta=0.2,
+            ref_policy_heuristic='entropy',
+            use_prm=False
+        )
+        
+        
+        #pomdp_py.RefPOMDPFast(
+        #            planning_time=2,
+        #            exploration_const=0.0,
+        #            discount_factor=.99,
+        #            eta=.2,
+        #            max_depth=100,
+        #            rollout_depth=450,
+        #            #episode_count=-1,
+        #            ref_policy_heuristic='uniform',
+        #            use_prm=False)
 
         # Create timer for control loop
         self.timer = self.create_timer(20.0, self.control_loop)  # 1Hz control loop
@@ -153,12 +163,12 @@ class POMDPManager(Node):
             if list(v) == list(action):
                 act = Action(k)
         print(act)
-        if act._name != "None":
-            self.lock.acquire()
-            self.obs_lst.append(Observation(observation))
-            self.acts_lst.append(act)
-            self.lock.release()
-            rr.log("Observation", rr.Arrows3D(origins=list(observation[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 1.0]))
+        #if act._name != "None":
+        self.lock.acquire()
+        self.obs_lst.append(Observation(observation))
+        self.acts_lst.append(act)
+        self.lock.release()
+        rr.log("Observation", rr.Arrows3D(origins=list(observation[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 1.0]))
 
     def pointcloud_callback(self, msg):
         pass
@@ -275,6 +285,7 @@ class POMDPManager(Node):
         origins = []
         vectors = []
         colors = []
+        beliefs = []
         size = 1
         while len(q) != 0:
             node = q.popleft()
@@ -282,6 +293,7 @@ class POMDPManager(Node):
             #print("VISITED NODE: ", node)
             if len(node.belief.particles) != 0:
                 avg = sum([s._position for s in node.belief.particles]) / len(node.belief.particles)
+                beliefs.extend([list(s._position)[:2] + [0.0] for s in node.belief.particles])
                 #print("AVG: ", avg)
             children = list(node.children.values())
             for child in children: #Qnode
@@ -301,6 +313,7 @@ class POMDPManager(Node):
         print("TREE SIZE: ", size)
         #rr.log("Tree", rr.Clear(recursive=False))
         rr.log("Tree", rr.Arrows3D(origins=origins, vectors=vectors, colors=colors))
+        rr.log("Beliefs", rr.Points3D(beliefs))
 
         # Visualize actions to be taken
         position = self.current_config

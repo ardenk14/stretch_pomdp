@@ -9,6 +9,10 @@ import stretch_pomdp.problems.stretch.domain.path_planner as pp
 import numpy as np
 import math
 
+import heapq
+import itertools
+
+
 import rerun as rr
 
 
@@ -117,7 +121,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         lm_pos = self._vamp_env.get_landmarks_pos()
 
         # calculate distances and convert them into weights
-        distances = [np.linalg.norm(np.array(state.get_position[:3]) - np.array(p)) for p in lm_pos[:-1]]
+        distances = [np.linalg.norm(np.array(state.get_position[:3]) - np.array(p)[:3]) for p in lm_pos[:-1]]
         distances -= np.max(distances)
         distances /= sum(distances)
 
@@ -201,18 +205,14 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
         return self.path_to_macro_action(state, path)
 
-    def path_to_macro_action(self, state, path):
-        """
-        :param state: The starting state (position)
-        :param path: A list of position nodes leading from path[0] (start) to path[-1] (goal)
-        :return: A list of macro actions that best approximate the path
-        """
 
-        def get_lookahead_point(path, current_pos, lookahead_dist):
-            """Find a point on the path ~lookahead_dist ahead of current_pos."""
+    def path_to_macro_action(self, state, path):
+        
+
+        """def get_lookahead_point(path, current_pos, lookahead_dist, last_lookahead_idx):
             pos = np.array(current_pos[:2])
     
-            for i in range(len(path) - 1):
+            for i in range(last_lookahead_idx, len(path) - 1):
                 a = np.array(path[i][:2])
                 b = np.array(path[i+1][:2])
                 ab = b - a
@@ -229,17 +229,84 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 if remaining <= ab_len - proj_len:
                     lookahead = closest + ab * (remaining / ab_len)
                     yaw = math.atan2(ab[1], ab[0])
-                    return (lookahead[0], lookahead[1], yaw)
+                    return (lookahead[0], lookahead[1], yaw), i
 
             # Fallback to final point
             end = path[-1]
+            return (end[0], end[1], end[2]), len(path) - 1"""
+
+        def get_lookahead_point(path, current_pos, lookahead_dist):
+            """
+            Finds a point `lookahead_dist` ahead of the closest point on the path to current_pos.
+            Guarantees forward progress along the path.
+            """
+            pos = np.array(current_pos[:2])
+            closest_dist = float('inf')
+            closest_proj = None
+            closest_idx = None
+            closest_t = 0.0  # relative position along the segment (0=start, 1=end)
+
+            # Step 1: find closest point on path
+            for i in range(len(path) - 1):
+                a = np.array(path[i][:2])
+                b = np.array(path[i + 1][:2])
+                ab = b - a
+                ab_len = np.linalg.norm(ab)
+                if ab_len < 1e-6:
+                    continue
+
+                ap = pos - a
+                t = np.clip(np.dot(ap, ab) / (ab_len ** 2), 0.0, 1.0)
+                proj = a + t * ab
+                dist = np.linalg.norm(proj - pos)
+
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_proj = proj
+                    closest_idx = i
+                    closest_t = t
+
+            if closest_proj is None:
+                # fallback
+                end = path[-1]
+                return (end[0], end[1], end[2])
+
+            # Step 2: walk forward along the path from closest point
+            remaining = lookahead_dist
+            i = closest_idx
+            t = closest_t
+            curr_pt = closest_proj
+
+            while i < len(path) - 1:
+                a = np.array(path[i][:2])
+                b = np.array(path[i + 1][:2])
+                ab = b - a
+                ab_len = np.linalg.norm(ab)
+
+                if i == closest_idx:
+                    seg_remain = (1.0 - t) * ab_len
+                    walk_dir = (b - a) / ab_len
+                    offset = walk_dir * ((1.0 - t) * ab_len)
+                    base = a + t * ab
+                else:
+                    seg_remain = ab_len
+                    walk_dir = ab / ab_len
+                    base = a
+
+                if remaining <= seg_remain:
+                    lookahead = base + walk_dir * remaining
+                    yaw = math.atan2(walk_dir[1], walk_dir[0])
+                    return (lookahead[0], lookahead[1], yaw)
+
+                remaining -= seg_remain
+                i += 1
+
+            # If we run out of path, just return the final point
+            end = path[-1]
             return (end[0], end[1], end[2])
 
+
         def angle_diff(a, b):
-            """
-            Smallest difference between angles a and b,
-            treating opposite directions (±π) as equally valid.
-            """
             a = (a + np.pi) % (2 * np.pi) - np.pi
             b = (b + np.pi) % (2 * np.pi) - np.pi
 
@@ -265,9 +332,11 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         current_pose = state._position  # (x, y, theta)
         actions = []
 
+        #last_lookahead_idx = 0
         for _ in range(self.max_nodes):
-            lookahead = get_lookahead_point(path, current_pose, 0.5)
+            lookahead= get_lookahead_point(path, current_pose, 0.5)#, last_lookahead_idx)
             #lookahead2 = get_lookahead_point(path, current_pose, 0.25)
+            #rr.log("LOOKAHEAD", rr.Points3D([lookahead[0], lookahead[1], 0.0], radii=[0.05]))
 
             best_action = None
             best_cost = float('inf')
@@ -290,7 +359,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 if cost < best_cost:
                     best_cost = cost
                     best_action = action
-                    best_new_pose = self._Tm.get_next_position(current_pose, action)
+                    best_new_pose = predicted_pose#self._Tm.get_next_position(current_pose, action)
 
             #if best_action is None:
             #    print("No suitable macro action found. Stopping.")
@@ -300,8 +369,8 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 actions.append(best_action)
                 current_pose = best_new_pose
 
-        if len(actions) == 0:
-            print("NO ACTIONS FOUND FROM POSE: ", state)
+        #if len(actions) == 0:
+        #    print("NO ACTIONS FOUND FROM POSE: ", state)
 
         # Visualization
         nodes = [state._position]
@@ -310,6 +379,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
         rr.log("Macro_Actions", rr.LineStrips3D([list(n[:2]) + [0.0] for n in nodes]))
 
+        actions.extend([Action("None"), Action("None")])
         return MacroAction(actions)
 
     def get_all_actions(self, state: State = None, history=None):

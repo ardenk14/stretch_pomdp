@@ -24,7 +24,7 @@ class StretchTransitionModel(TransitionModel):
         self.ts = []
         self.true_t = 0
 
-    def next(self, v0, w0, v_goal, w_goal, theta_start, T, dt=0.02):
+    def next(self, v0, w0, v_goal, w_goal, theta_start, T, dt=0.1):
         x, y, theta = 0.0, 0.0, theta_start
         L = 0.3196581671875644
 
@@ -64,10 +64,10 @@ class StretchTransitionModel(TransitionModel):
             self.ts.append(self.true_t)
 
             # If no acceleration, we have a closed form solution and end integration in one step here
-            #if vl == vlg and vr == vrg:
-            #    dx, dy, dtheta = self.constant_velocity_motion(v0, w0, theta, T - t)
-            #    theta = (theta + dtheta + math.pi) % (2 * math.pi) - math.pi
-            #    return x+dx, y+dy, theta, v0, w0
+            if vl == vlg and vr == vrg:
+                dx, dy, dtheta = self.constant_velocity_motion(v0, w0, theta, T - t)
+                theta = (theta + dtheta + math.pi) % (2 * math.pi) - math.pi
+                return x+dx, y+dy, theta, v0, w0
 
             dl = vl * dt
             dr = vr * dt
@@ -144,7 +144,9 @@ class StretchTransitionModel(TransitionModel):
         #    #print("COLLISION! ", list(next_position)[:11] + [0., 0.])
         #    #print("COLLISION! ", list(position))#[:11] + [0., 0.])
         #    #raise ValueError("AHHHHHH")
+        #    #rr.log("Collisions", rr.Points3D([next_position[0], next_position[1], 0.0], radii=[0.05]))
         #    return position
+        #rr.log("FREE", rr.Points3D([next_position[0], next_position[1], 0.0], radii=[0.05]))
         return next_position
 
     def get_next_position(self, position, action):

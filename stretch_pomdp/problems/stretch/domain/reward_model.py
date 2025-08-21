@@ -27,6 +27,6 @@ class StretchRewardModel(RewardModel):
         if next_state._goal:
             return self.GOAL_REWARD
 
-        if np.linalg.norm(np.array(next_state._position)[:2] - np.array(self._vamp_env._goal[1])[:2]) < np.linalg.norm(np.array(state._position)[:2] - np.array(self._vamp_env._goal[1])[:2]):
-           return self.STEP_REWARD + 2.0 
+        #if np.linalg.norm(np.array(next_state._position)[:2] - np.array(self._vamp_env._goal[1])[:2]) < np.linalg.norm(np.array(state._position)[:2] - np.array(self._vamp_env._goal[1])[:2]):
+        #   return self.STEP_REWARD + 2.0 
         return self.STEP_REWARD

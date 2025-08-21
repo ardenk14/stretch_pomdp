@@ -11,12 +11,14 @@ class Observation(basics.Observation):
         self._hash = hash(tuple(self._pos_reading))
 
     def __hash__(self):
-        return self._hash
+        return 1#self._hash
 
     def __eq__(self, other):
         if isinstance(other, Observation):
-            return self._hash == other._hash
-        return False
+            if np.linalg.norm(np.array(self._pos_reading[:3]) - np.array(other._pos_reading[:3])) <= 0.3:
+                return True
+            #return self._hash == other._hash
+        return True#False
 
     def __str__(self):
         return f"<pos_reading {self._pos_reading}>"
