@@ -40,7 +40,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
     def random_sample(self):
         return MacroAction([self.ACTIONS[np.random.choice(np.arange(len(self.ACTIONS)))]])
 
-    def heuristic_sample(self, state, heuristics, epsilon=.05, h=0):
+    def heuristic_sample(self, state, heuristics, epsilon=0., h=0):
         """
         General sampling queries, with prob(epsilon) sample the state space uniformly
         Otherwise, sample landmarks according to the given heuristics.

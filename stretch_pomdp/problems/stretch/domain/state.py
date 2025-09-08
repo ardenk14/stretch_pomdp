@@ -31,12 +31,7 @@ class State(basics.State):
 
     def __eq__(self, other):
         if isinstance(other, State):
-            return (np.linalg.norm(np.array(self._position) - np.array(other._position), ord=3) < State.EPSILON and
-                    tuple(self._position) == tuple(other._position) and
-                    self._terminal == other._terminal and
-                    self._danger_zone == other._danger_zone and
-                    self._landmark == other._landmark and
-                    self._goal == other._goal)
+            return np.linalg.norm(np.array(self._position) - np.array(other._position), ord=3) < State.EPSILON
         else:
             return False
 
