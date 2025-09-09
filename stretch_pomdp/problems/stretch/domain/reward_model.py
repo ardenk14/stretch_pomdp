@@ -13,6 +13,18 @@ class StretchRewardModel(RewardModel):
     def __init__(self, vamp_env):
         self._vamp_env = vamp_env
 
+    @property
+    def step_reward(self):
+        return self.STEP_REWARD
+
+    @property
+    def dz_reward(self):
+        return self.DZ_REWARD
+
+    @property
+    def goal_reward(self):
+        return self.GOAL_REWARD
+
     def probability(self, reward, state, action, next_state):
         raise NotImplementedError
 

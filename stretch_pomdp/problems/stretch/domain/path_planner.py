@@ -32,7 +32,7 @@ class PathPlanner:
                 break
 
             print(f"Trying restart attempt #{i}...")
-            result = planner_func(source, target, self._vamp_env, self.plan_settings, self.sampler)
+            result = self.planner_func(source, target, self._vamp_env, self.plan_settings, self.sampler)
 
         if result is None or result.size == 0:
             print(f"Warning: RRT-C failed to find a path despite {restarts} attempts!")
@@ -40,13 +40,13 @@ class PathPlanner:
 
         simple = self.vamp_module.simplify(result.path, self._vamp_env, self.simp_settings, self.sampler)
 
-        path = [s.to_list()[:2]+[0.0] for s in simple.path]
-        src = source[:2] + [0.0]
-        trgt = target[:2] + [0.0]
+        # path = [s.to_list()[:2]+[0.0] for s in simple.path]
+        # src = source[:2] + [0.0]
+        # trgt = target[:2] + [0.0]
         #print("PATH: ", path)
         #print("SRC: ", src)
         #print("TRGT: ", trgt)
-        rr.log("VAMP", rr.LineStrips3D(path))#, rr.Points3D([src, trgt]))
+        # rr.log("VAMP", rr.LineStrips3D(path))#, rr.Points3D([src, trgt]))
 
         #simple.path.interpolate(vamp.stretch.resolution())
 

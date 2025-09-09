@@ -8,6 +8,7 @@ from stretch_pomdp.problems.stretch.domain.state import State
 import stretch_pomdp.problems.stretch.domain.path_planner as pp
 import numpy as np
 import math
+import time
 
 import heapq
 import itertools
@@ -36,11 +37,13 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         for a in self.ACTIONS:
             self.all_ref_actions.append(MacroAction([a]))
         self._ref_actions_num = 15
+        self.total_time = 0.
+        self.rrtc_time = 0.
 
     def random_sample(self):
         return MacroAction([self.ACTIONS[np.random.choice(np.arange(len(self.ACTIONS)))]])
 
-    def heuristic_sample(self, state, heuristics, epsilon=0., h=0):
+    def heuristic_sample(self, state, heuristics, epsilon=0.0, h=0):
         """
         General sampling queries, with prob(epsilon) sample the state space uniformly
         Otherwise, sample landmarks according to the given heuristics.
@@ -61,7 +64,10 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             elif heuristics == "distance":
                 return self.weighted_distance_sample(state)
             elif heuristics == "uniform":
-                return self.sample(state)
+                start = time.time()
+                action = self.sample(state)
+                self.total_time += time.time() - start
+                return action
             else:
                 raise Exception(f"Invalid heuristics {heuristics}")
 
@@ -87,7 +93,9 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         state_pos = list(state.get_position)[:11] + [0., 0.]
 
         # Generate the shortest path from the sampled state to the landmark
+        start = time.time()
         path = self._path_planner.shortest_path(state_pos, np.array(sampled_lm))[:self.max_nodes]
+        self.rrtc_time += time.time() - start
         # find macro actions that resemble the shortest path
         # TODO: refine the approximation using continuous actions representation instead of discrete ones
         if len(path) < 2:

@@ -10,8 +10,8 @@ class StretchPOMDP:
         self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
         self.planner = pomdp_py.ROPRAS3(
             planning_time=2,
-            max_depth=100,
-            rollout_depth=450,
+            max_depth=20,
+            rollout_depth=20,
             eta=0.2,
             ref_policy_heuristic='uniform',
             use_prm=False
@@ -20,6 +20,10 @@ class StretchPOMDP:
 
     def plan(self):
         action = self.planner.plan(self.problem.agent, no_pomdp=False)
+        reference_policy_time = self.problem.agent.policy_model.total_time
+        vamp_time = self.problem.agent.policy_model.rrtc_time
+        print(f"reference_policy_time: {reference_policy_time}")
+        print(f"vamp time: {vamp_time}")
         return action
 
     def random_action_executions(self, n = 3):
@@ -36,7 +40,6 @@ class StretchPOMDP:
                 f"State: {self.problem.env.state}")
             n-=1
         return
-
 
 
 def main(args=None):
