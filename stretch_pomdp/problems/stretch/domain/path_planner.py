@@ -1,5 +1,6 @@
 import vamp
 import rerun as rr
+import time
 
 class PathPlanner:
     def __init__(self, vamp_env):
@@ -8,24 +9,20 @@ class PathPlanner:
         (self.vamp_module, self.planner_func, self.plan_settings,
          self.simp_settings) = vamp.configure_robot_and_planner_with_kwargs("stretch", "rrtc")
 
+        self.plan_settings.max_iterations = 1000
         self.sampler = getattr(self.vamp_module, "halton")()
         self.sampler.skip(0)
 
     def shortest_path(self, source, target, max_iterations=100000, restarts=0):
-        #print("SOURCE: ", source)
-        #print("TARGET: ", target)
-        # print(f"finding shortest path between {source} and {target}")
-        #settings = vamp.RRTCSettings()
-        #settings.range = 1.
-        #settings.max_iterations = max_iterations
-        #self.vmp.load_primitive_collision_objects()
-
-        
-        #source = [0., 0., 0., 0.4, 0., 0., 0., 0., 0., 0., 0., 0., 0.]
-        #target = [1., 0., 0.0, 0.95, 0.1, 0.1, 0.1, 0.1, 0., 0., 0., 0., 0.]
-        #print("SOURCE: ", len(source))
-        #print("TARGET: ", len(target))
+        #print("PLANNING")
+        t1 = time.time()
         result = self.planner_func(source, target, self._vamp_env, self.plan_settings, self.sampler)
+        #print("DONE: ", time.time() - t1)
+
+        if time.time() - t1 > 1.0:
+            print("PLANNING TOOK TOO LONG: ", time.time() - t1)
+            print("SOURCE: ", source)
+            print("TARGET: ", target)
         
         for i in range(restarts):
             if len(result.path) > 0:

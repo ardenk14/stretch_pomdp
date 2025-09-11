@@ -36,13 +36,15 @@ import rerun as rr
 from collections import deque
 import copy
 
+import time
+
 
 class POMDPManager(Node):
     def __init__(self):
         super().__init__('vamp_manager')
 
-        rr.init("rerun_example_my_data", spawn=False)
-        rr.serve_web(open_browser=True, server_memory_limit='0.00%')
+        rr.init("rerun_example_my_data", spawn=True)
+        #rr.serve_web(open_browser=True, server_memory_limit='25.00%')
         #rr.serve_web(server_memory_limit='0.00%')
 
         # Subscribe to Pointcloud and primitives in the environment
@@ -101,8 +103,8 @@ class POMDPManager(Node):
 
         self.planner = pomdp_py.ROPRAS3(
             planning_time=2,
-            max_depth=100,
-            rollout_depth=450,
+            max_depth=20,
+            rollout_depth=20,
             eta=0.2,
             ref_policy_heuristic='entropy',
             use_prm=False
@@ -121,7 +123,7 @@ class POMDPManager(Node):
         #            use_prm=False)
 
         # Create timer for control loop
-        self.timer = self.create_timer(20.0, self.control_loop)  # 1Hz control loop
+        self.timer = self.create_timer(20.0, self.control_loop)
         self.control_loop()
 
     def odom_callback(self, msg):
@@ -211,6 +213,7 @@ class POMDPManager(Node):
 
     def _run_control_loop(self):
         """ Run the POMDP Planner """
+        print("BEGIN CONTROL LOOP")
         # Update vamp_env
         #print(problem.policty.root)
 
@@ -239,7 +242,16 @@ class POMDPManager(Node):
                 positions.append(list(k.get_position[:2]) + [0.0])
             rr.log("current_belief", rr.Points3D(np.array(positions)))
 
+        t1 = time.time()
         action = self.planner.plan(self.problem.agent, no_pomdp=False)
+        t2 = time.time()
+        print("PLANNING TIME: ", t2-t1)
+        reference_policy_time = self.problem.agent.policy_model.total_time
+        vamp_time = self.problem.agent.policy_model.rrtc_time
+        print(f"reference_policy_time: {reference_policy_time}")
+        print(f"vamp time: {vamp_time}")
+        self.problem.agent.policy_model.total_time = 0.0
+        self.problem.agent.policy_model.rrtc_time = 0.0
         self.last_action = action.action_sequence[0]
 
         self.get_logger().info(str(action))#.action_sequence[0].motion)
@@ -328,6 +340,7 @@ class POMDPManager(Node):
             vectors[-1][-1] = 0.0
             position = next_position
         rr.log("Taken_Action", rr.Arrows3D(origins=origins, vectors=vectors, colors=[0.0, 0.5, 1.0]))
+        print("END CONTROL LOOP")
 
 
 def main(args=None):

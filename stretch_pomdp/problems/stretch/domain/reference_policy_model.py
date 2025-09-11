@@ -335,6 +335,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             return cost
 
         if len(path) < 2:
+            print("PATH TOO SHORT")
             return MacroAction([])
 
         current_pose = state._position  # (x, y, theta)
@@ -377,8 +378,8 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 actions.append(best_action)
                 current_pose = best_new_pose
 
-        #if len(actions) == 0:
-        #    print("NO ACTIONS FOUND FROM POSE: ", state)
+        if len(actions) == 0:
+            print("NO ACTIONS FOUND FROM POSE: ", state)
 
         # Visualization
         nodes = [state._position]
