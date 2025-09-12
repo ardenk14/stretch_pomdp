@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'pomdp_manager = stretch_pomdp.pomdp_manager:main',
             'action_follower = stretch_pomdp.action_follower:main',
+            'lidar_manager = stretch_pomdp.lidar_manager:main',
         ],
     },
 )
