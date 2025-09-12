@@ -39,8 +39,8 @@ class VAMPEnv():
         self._goal = (1.0, [2.0, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
 
         self._landmarks = []
-        for i in range(-4, 4):
-            for j in range(-4, 4):
+        for i in range(-1, 4):
+            for j in range(-1, 4):
                 self._landmarks.append([[1, 1, 1], [float(i)/2.0, float(j)/2.0, 0], [0, 0, 0]])
         #self._landmarks = [
         #    [[1, 1, 1], [2.0, 1.0, 0.0], [0, 0, 0]],
@@ -58,7 +58,7 @@ class VAMPEnv():
         ]
 
         self.cuboids = []
-        self.spheres = [(0.5, (1.0, 0.0, 0.0)),
+        self.spheres = [(0.2, (1.0, 0.0, 0.0)),
                         #(0.5, (1.0, 0-.25, 0.25))
                         ]
         self.heightfields = []
@@ -95,6 +95,9 @@ class VAMPEnv():
             centers.append(center)
             radii.append(radius)
         rr.log("Obstacles", rr.Points3D(centers, radii=radii), static=True)
+
+
+        rr.log("Goal", rr.Points3D(self._goal[1][:3], radii=0.1), static=True)
 
     def get_landmarks_pos(self, include_goal=True):
         lms = [lm[1] + [0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0] for lm in self._landmarks]

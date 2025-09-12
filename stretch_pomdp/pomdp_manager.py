@@ -106,7 +106,7 @@ class POMDPManager(Node):
             max_depth=20,
             rollout_depth=20,
             eta=0.2,
-            ref_policy_heuristic='entropy',
+            ref_policy_heuristic='uniform',
             use_prm=False
         )
         
@@ -123,7 +123,7 @@ class POMDPManager(Node):
         #            use_prm=False)
 
         # Create timer for control loop
-        self.timer = self.create_timer(20.0, self.control_loop)
+        self.timer = self.create_timer(10.0, self.control_loop)
         self.control_loop()
 
     def odom_callback(self, msg):
@@ -234,7 +234,10 @@ class POMDPManager(Node):
             # Update history and belief
             self.problem.agent.update_history(action, observation)
             self.problem.env.apply_transition(state) # current state = next_state (best estimate)
+            belief_start_time = time.time()
             self.planner.update(self.problem.agent, action, observation)
+            belief_time = time.time() - belief_start_time
+            print(f"Belief update time: {belief_time}")
 
             # Visualize current belief
             positions = []
