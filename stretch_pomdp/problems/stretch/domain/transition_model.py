@@ -140,12 +140,13 @@ class StretchTransitionModel(TransitionModel):
         next_position[11] = v
         next_position[12] = w
 
-        #if self._vamp_env.collision_checker(list(next_position)[:11] + [0., 0.]):
-        #    #print("COLLISION! ", list(next_position)[:11] + [0., 0.])
-        #    #print("COLLISION! ", list(position))#[:11] + [0., 0.])
-        #    #raise ValueError("AHHHHHH")
-        #    #rr.log("Collisions", rr.Points3D([next_position[0], next_position[1], 0.0], radii=[0.05]))
-        #    return position
+        # TODO: Ensure you don't have to throw out too many paths!
+        """if self._vamp_env.collision_checker(list(next_position)[:11] + [0., 0.]):
+            #print("COLLISION! ", list(next_position)[:11] + [0., 0.])
+            #print("COLLISION! ", list(position))#[:11] + [0., 0.])
+            #raise ValueError("AHHHHHH")
+            #rr.log("Collisions", rr.Points3D([next_position[0], next_position[1], 0.0], radii=[0.05]))
+            return position"""
         #rr.log("FREE", rr.Points3D([next_position[0], next_position[1], 0.0], radii=[0.05]))
         return next_position
 
