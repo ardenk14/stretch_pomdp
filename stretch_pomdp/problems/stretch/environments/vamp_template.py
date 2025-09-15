@@ -29,6 +29,7 @@ class VAMPEnv():
 
     def __init__(self,
                  robot_init_config=(0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.),
+                 obstacle_loc = (1.0, 0.0, 0.0),
                  debug=False,
                  resize=0):
         self._robot_init_config = robot_init_config
@@ -58,7 +59,7 @@ class VAMPEnv():
         ]
 
         self.cuboids = []
-        self.spheres = [(0.2, (1.0, 0.0, 0.0)),
+        self.spheres = [(0.2, (obstacle_loc[0], obstacle_loc[1], 0)),
                         #(0.5, (1.0, 0-.25, 0.25))
                         ]
         self.heightfields = []

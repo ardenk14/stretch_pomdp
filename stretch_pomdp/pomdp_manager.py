@@ -1,6 +1,7 @@
 import rclpy
 import tf2_ros
 from rclpy.node import Node
+from scalene.scalene_utility import on_stack
 
 from sensor_msgs.msg import PointCloud2
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -81,11 +82,12 @@ class POMDPManager(Node):
 
         self.lock = threading.Lock()
 
+        # get initial environment sensing
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
-        self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=5.0))
+        self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        time.sleep(1.0)
+        self.obstacle_loc = None
 
         self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.obs_lst = []
@@ -105,9 +107,9 @@ class POMDPManager(Node):
         self.last_w = 0.0
         self.last_t = None
 
-        self.vamp_env = VAMPEnv()
-        self._Tm = StretchTransitionModel(self.vamp_env)
-        self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
+        self.vamp_env = None
+        self._Tm = None
+        self.problem = None
 
         self.planner = pomdp_py.ROPRAS3(
             planning_time=2,
@@ -119,23 +121,23 @@ class POMDPManager(Node):
         )
 
         # Create timer for control loop
-        self.timer = self.create_timer(10.0, self.control_loop)
-        self.aruco_timer = self.create_timer(0.5, self._get_obstacle_transform)
+        self.aruco_timer = self.create_timer(1, self._get_obstacle_transform)
+        self.detect_loop()
+        self.control_timer = self.create_timer(10.0, self.control_loop)
         self.control_loop()
 
     def _get_obstacle_transform(self):
         try:
             # Look up transform between the base_link and requested ArUco tag
             transform = self.tf_buffer.lookup_transform('base_link',
-                                                        "cube",
-                                                        Time(),
-                                                        Duration(seconds=0.25))
+                                                        'cube',
+                                                        Time())
 
-            print(f"Found requested tag: {transform}")
-            return transform
+            self.obstacle_loc = [transform.transform.translation.x,
+                                 transform.transform.translation.y,
+                                 transform.transform.translation.z]
         except TransformException as ex:
-            print("No transformation found")
-            return None
+            pass
 
     def odom_callback(self, msg):
         def quaternion_to_yaw(quaternion):
@@ -222,8 +224,22 @@ class POMDPManager(Node):
         thread.daemon = True
         thread.start()
 
+    def detect_loop(self):
+        thread = threading.Thread(target=self._get_obstacle_transform)
+        thread.daemon = True
+        thread.start()
+
     def _run_control_loop(self):
         """ Run the POMDP Planner """
+        if self.problem is None:
+            print("WAITING FOR ENVIRONMENT INITIALIZATION")
+            if self.obstacle_loc is not None:
+                self.vamp_env = VAMPEnv(obstacle_loc=self.obstacle_loc)
+                self._Tm = StretchTransitionModel(self.vamp_env)
+                self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
+            else:
+                return
+
         print("BEGIN CONTROL LOOP")
         # Update vamp_env
         #print(problem.policty.root)
