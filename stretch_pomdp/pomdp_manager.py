@@ -1,4 +1,5 @@
 import rclpy
+import tf2_ros
 from rclpy.node import Node
 
 from sensor_msgs.msg import PointCloud2
@@ -35,7 +36,8 @@ from std_msgs.msg import MultiArrayDimension, MultiArrayLayout
 import rerun as rr
 from collections import deque
 import copy
-
+import tf2_ros
+from tf2_ros import TransformException
 import time
 
 
@@ -79,6 +81,12 @@ class POMDPManager(Node):
 
         self.lock = threading.Lock()
 
+        self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        self.tf_buffer = tf2_ros.Buffer(cache_time=Duration(seconds=5.0))
+        self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
+        time.sleep(1.0)
+
         self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.obs_lst = []
         self.acts_lst = []
@@ -109,22 +117,25 @@ class POMDPManager(Node):
             ref_policy_heuristic='uniform',
             use_prm=False
         )
-        
-        
-        #pomdp_py.RefPOMDPFast(
-        #            planning_time=2,
-        #            exploration_const=0.0,
-        #            discount_factor=.99,
-        #            eta=.2,
-        #            max_depth=100,
-        #            rollout_depth=450,
-        #            #episode_count=-1,
-        #            ref_policy_heuristic='uniform',
-        #            use_prm=False)
 
         # Create timer for control loop
         self.timer = self.create_timer(10.0, self.control_loop)
+        self.aruco_timer = self.create_timer(0.5, self._get_obstacle_transform)
         self.control_loop()
+
+    def _get_obstacle_transform(self):
+        try:
+            # Look up transform between the base_link and requested ArUco tag
+            transform = self.tf_buffer.lookup_transform('base_link',
+                                                        "cube",
+                                                        Time(),
+                                                        Duration(seconds=0.25))
+
+            print(f"Found requested tag: {transform}")
+            return transform
+        except TransformException as ex:
+            print("No transformation found")
+            return None
 
     def odom_callback(self, msg):
         def quaternion_to_yaw(quaternion):

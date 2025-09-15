@@ -11,6 +11,7 @@ import copy
 
 from rclpy.time import Time
 import matplotlib.pyplot as plt
+import hello_helpers.hello_misc as hm
 import rerun as rr
 
 def get_next_position(position, action):
