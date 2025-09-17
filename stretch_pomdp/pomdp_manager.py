@@ -46,7 +46,9 @@ class POMDPManager(Node):
     def __init__(self):
         super().__init__('vamp_manager')
 
-        rr.init("rerun_example_my_data", spawn=True)
+        rr.init("stretch_pomdp")
+        server_uri = rr.serve_grpc()
+        rr.serve_web_viewer(connect_to=server_uri)
         #rr.serve_web(open_browser=True, server_memory_limit='25.00%')
         #rr.serve_web(server_memory_limit='0.00%')
 
@@ -370,7 +372,6 @@ class POMDPManager(Node):
 
         print("TREE SIZE: ", size)
         #rr.log("Tree", rr.Clear(recursive=False))
-        print(f"number of edges in the tree: {vectors}")
         rr.log("Tree", rr.Arrows3D(origins=origins, vectors=vectors, colors=colors))
         rr.log("Beliefs", rr.Points3D(beliefs))
 

@@ -38,7 +38,7 @@ class VAMPEnv():
         # ====================================================
         # Assumes a single spherical goal region.
         self._goal = (1.0, [2.5, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
-        self.sphere_approx_radius = 0.5
+        self.sphere_approx_radius = 0.1
         # self.cylinder_height = 1
         # self.cylinder_euler = (0, 0, 1.16)
 
