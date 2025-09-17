@@ -83,11 +83,11 @@ class POMDPManager(Node):
         self.lock = threading.Lock()
 
         # get initial environment sensing
-        self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        # self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        self.obstacle_loc = None
+        self.obstacle_loc = None # (1, 0, 0)
 
         self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.obs_lst = []
@@ -107,8 +107,8 @@ class POMDPManager(Node):
         self.last_w = 0.0
         self.last_t = None
 
-        self.vamp_env = None
-        self._Tm = None
+        self.vamp_env = VAMPEnv(obstacle_loc=self.obstacle_loc)
+        self._Tm = StretchTransitionModel(self.vamp_env)
         self.problem = None
 
         self.planner = pomdp_py.ROPRAS3(
@@ -135,7 +135,7 @@ class POMDPManager(Node):
 
             self.obstacle_loc = [transform.transform.translation.x,
                                  transform.transform.translation.y,
-                                 transform.transform.translation.z]
+                                 0] # we use cylinder to approximate anything, hence we assume things are connected to the ground
         except TransformException as ex:
             pass
 
@@ -186,6 +186,8 @@ class POMDPManager(Node):
         rr.log("Observation", rr.Arrows3D(origins=list(observation[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 1.0]))
 
     def pointcloud_callback(self, msg):
+        # Update vamp_env
+        #print(problem.policty.root)
         pass
 
     def sphere_callback(self, msg):
@@ -216,6 +218,8 @@ class POMDPManager(Node):
         qx = cy * cp * sr - sy * sp * cr
         qy = cy * sp * cr + sy * cp * sr
         qz = sy * cp * cr - cy * sp * sr
+        # Update vamp_env
+        #print(problem.policty.root)
         
         return qx, qy, qz, qw
 
@@ -234,9 +238,8 @@ class POMDPManager(Node):
         if self.problem is None:
             print("WAITING FOR ENVIRONMENT INITIALIZATION")
             if self.obstacle_loc is not None:
-                self.vamp_env = VAMPEnv(obstacle_loc=self.obstacle_loc)
-                self._Tm = StretchTransitionModel(self.vamp_env)
-                self.problem = init_stretch_pomdp(self.current_config, self.vamp_env)
+                print(f"obstacle_loc is: {self.obstacle_loc}")
+                self.problem = init_stretch_pomdp(self.current_config, self.obstacle_loc, self.vamp_env)
             else:
                 return
 
@@ -258,6 +261,7 @@ class POMDPManager(Node):
             print("ACT: ", action)
             print("OBS: ", observation)
             state = State(self.current_config, False, False, False)
+
             # Update history and belief
             self.problem.agent.update_history(action, observation)
             self.problem.env.apply_transition(state) # current state = next_state (best estimate)
@@ -268,10 +272,23 @@ class POMDPManager(Node):
 
             # Visualize current belief
             positions = []
+            obstacle_positions = []
             for k, v in self.problem.agent.tree.belief.get_histogram().items():
                 positions.append(list(k.get_position[:2]) + [0.0])
-            rr.log("current_belief", rr.Points3D(np.array(positions)))
+                print(f"belief particle obstacle loc: {k.get_obstacle_loc}")
+                obstacle_positions.append(list(k.get_obstacle_loc))
+                
+            rr.log("current_pos_belief", rr.Points3D(np.array(positions)))
+            # cylinder_radius = [self.problem._vamp_env.cylinder_approx_radius] * len(obstacle_positions)
+            # cylinder_length = [self.problem._vamp_env.cylinder_height] * len(obstacle_positions)
+            # cylinder_euler = [self.problem._vamp_env.cylinder_euler] * len(obstacle_positions)
+            # rr.log("current_obs_belief", rr.Capsules3D(lenghts = cylinder_length, 
+            #                                            radii = cylinder_radius, 
+            #                                            translations=obstacle_positions, 
+            #                                            rotation_axis_angles=cylinder_euler,
+            #                                            colors = [0, 1, 0,]))
 
+        # get next action
         t1 = time.time()
         action = self.planner.plan(self.problem.agent, no_pomdp=False)
         t2 = time.time()
@@ -283,7 +300,6 @@ class POMDPManager(Node):
         self.problem.agent.policy_model.total_time = 0.0
         self.problem.agent.policy_model.rrtc_time = 0.0
         self.last_action = action.action_sequence[0]
-
         self.get_logger().info(str(action))#.action_sequence[0].motion)
 
         # Publish actions
@@ -354,6 +370,7 @@ class POMDPManager(Node):
 
         print("TREE SIZE: ", size)
         #rr.log("Tree", rr.Clear(recursive=False))
+        print(f"number of edges in the tree: {vectors}")
         rr.log("Tree", rr.Arrows3D(origins=origins, vectors=vectors, colors=colors))
         rr.log("Beliefs", rr.Points3D(beliefs))
 

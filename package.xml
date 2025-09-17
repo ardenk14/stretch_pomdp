@@ -6,7 +6,7 @@
   <description>TODO: Package description</description>
   <maintainer email="ardenk14@gmail.com">ardenk14</maintainer>
   <license>Apache-2.0</license>
-
+  <test_depend>pytest</test_depend> 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

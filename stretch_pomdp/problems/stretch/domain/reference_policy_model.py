@@ -94,7 +94,8 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
 
         # Generate the shortest path from the sampled state to the landmark
         start = time.time()
-        path = self._path_planner.shortest_path(state_pos, np.array(sampled_lm))[:self.max_nodes]
+        vamp_env = self._vamp_env.state_to_vamp(state)
+        path = self._path_planner.shortest_path(state_pos, np.array(sampled_lm), vamp_env=vamp_env)[:self.max_nodes]
         self.rrtc_time += time.time() - start
         # find macro actions that resemble the shortest path
         # TODO: refine the approximation using continuous actions representation instead of discrete ones
@@ -202,11 +203,11 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         # sample a milestone according to above probability
         sampled_idx = np.random.choice(len(lm_pos), p=w)
         sampled_lm = lm_pos[sampled_idx]
-
         state_pos = list(state.get_position)[:11] + [0., 0.]
         #print("SAMPLED LM: ", sampled_lm)
         #print("STATE: ", state_pos)
-        path = self._path_planner.shortest_path(state_pos, list(np.array(sampled_lm)))[:self.max_nodes]
+        vamp_env = self._vamp_env.state_to_vamp(state)
+        path = self._path_planner.shortest_path(state_pos, list(np.array(sampled_lm)), vamp_env=vamp_env)[:self.max_nodes]
 
         if len(path) < 2:
             return MacroAction([])

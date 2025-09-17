@@ -29,7 +29,7 @@ class VAMPEnv():
 
     def __init__(self,
                  robot_init_config=(0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.),
-                 obstacle_loc = (1.0, 0.0, 0.0),
+                 obstacle_loc = None,
                  debug=False,
                  resize=0):
         self._robot_init_config = robot_init_config
@@ -37,7 +37,10 @@ class VAMPEnv():
         # Customize objects.
         # ====================================================
         # Assumes a single spherical goal region.
-        self._goal = (1.0, [2.0, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self._goal = (1.0, [2.5, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self.sphere_approx_radius = 0.5
+        # self.cylinder_height = 1
+        # self.cylinder_euler = (0, 0, 1.16)
 
         self._landmarks = []
         for i in range(-1, 4):
@@ -59,9 +62,7 @@ class VAMPEnv():
         ]
 
         self.cuboids = []
-        self.spheres = [(0.2, (obstacle_loc[0], obstacle_loc[1], 0)),
-                        #(0.5, (1.0, 0-.25, 0.25))
-                        ]
+        self.spheres = []
         self.heightfields = []
         self.cylinders = []
         self.capsules = []
@@ -81,6 +82,16 @@ class VAMPEnv():
     @property
     def get_robot_init_config(self):
         return self._robot_init_config
+    
+    def state_to_vamp(self, state):
+        """
+        Pass in a state, load the state obstacles into vamp and return the 
+        new vamp environment
+        """
+        env = vamp.Environment()
+        env.add_sphere(vamp.Sphere(state.get_obstacle_loc,
+                                   self.sphere_approx_radius))
+        return env
 
     def init_env(self):
         self.load_primitive_collision_objects()
@@ -96,8 +107,6 @@ class VAMPEnv():
             centers.append(center)
             radii.append(radius)
         rr.log("Obstacles", rr.Points3D(centers, radii=radii), static=True)
-
-
         rr.log("Goal", rr.Points3D(self._goal[1][:3], radii=0.1), static=True)
 
     def get_landmarks_pos(self, include_goal=True):
@@ -110,9 +119,9 @@ class VAMPEnv():
         for radius, center in self.spheres:
             self._env.add_sphere(vamp.Sphere(center, radius))
 
-        print("CENTER: ", center)
-        print("RADIUS: ", radius)
-        rr.log("Obstacles", rr.Points3D(center, radii=[radius]), static=True)
+        # print("CENTER: ", center)
+        # print("RADIUS: ", radius)
+        # rr.log("Obstacles", rr.Points3D(center, radii=[radius]), static=True)
 
         """for radius, height, center, euler in self.capsules:
             self._env.add_capsule(vamp.make_cylinder(radius, height, *center, *euler))
@@ -128,11 +137,12 @@ class VAMPEnv():
 
             self._env.add_heightfield(vamp.png_to_heightfield(path, center, scale))"""
 
-    def collision_checker(self, config):
-        """Returns True if in collision, False otherwise."""
+    def collision_checker(self, config, vamp_env = None):
+        """ Returns True if in collision, False otherwise."""
         # Upper bound 0.13
-        vamp_config = [config[0], config[1], config[2], config[3]]
-        return not vamp.stretch.validate(config, self._env)
+        # vamp_config = [config[0], config[1], config[2], config[3]]
+        vamp_env = self._env if vamp_env is None else vamp_env
+        return not vamp.stretch.validate(config, vamp_env)
 
     def dz_checker(self, config):
         # work for axis aligned danger zone bounding box only

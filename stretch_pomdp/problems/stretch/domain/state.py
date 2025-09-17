@@ -3,11 +3,11 @@ import numpy as np
 
 
 class State(basics.State):
-    EPSILON = 0.1
+    EPSILON = 0.01
     UPPER_BOUNDS = np.array([5, 5, 2*np.pi, 1.1, 0.13, 0.13, 0.13, 0.13, 0, 0, 0, 0, 0])#np.array([5, 5, 2*np.pi, 0, 0, 0, 0, 0, 0, 0, 0])
     LOWER_BOUNDS = np.array([-5, -5, -2*np.pi, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
-    def __init__(self, position, danger_zone, landmark, goal):
+    def __init__(self, position, obstacle_loc, danger_zone, landmark, goal):
         """
         position (numpy array): The state position (x, y, theta, lift, extenstion, wrist_yaw, wrist_pitch, wrist_roll, head_pan, head_tilt, gripper)).
         danger_zone (bool): The robot is at a danger zone.
@@ -16,22 +16,28 @@ class State(basics.State):
 
         """
         self._position = position
+        self._obstacle_loc = obstacle_loc
         self._terminal = danger_zone or goal
         self._danger_zone = danger_zone
         self._landmark = landmark
         self._goal = goal
-        self._hash = hash((tuple(self._position), self._terminal, self._danger_zone, self._landmark, self._goal))
+        self._hash = hash((tuple(self._position), tuple(self._obstacle_loc)))
 
     @property
     def get_position(self):
         return self._position
+    
+    @property
+    def get_obstacle_loc(self):
+        return self._obstacle_loc
 
     def __hash__(self):
         return self._hash
 
     def __eq__(self, other):
         if isinstance(other, State):
-            return np.linalg.norm(np.array(self._position) - np.array(other._position), ord=3) < State.EPSILON
+            return (np.linalg.norm(np.array(self._position) - np.array(other._position), ord=3) < State.EPSILON and 
+                    np.linalg.norm(np.array(self._obstacle_loc) - np.array(other._obstacle_loc), ord=3) < State.EPSILON)
         else:
             return False
 

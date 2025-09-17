@@ -17,7 +17,6 @@ setup(
     maintainer_email='ardenk14@gmail.com',
     description='TODO: Package description',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'pomdp_manager = stretch_pomdp.pomdp_manager:main',
@@ -25,4 +24,7 @@ setup(
             'lidar_manager = stretch_pomdp.lidar_manager:main',
         ],
     },
+   extras_require={
+	'test':['pytest'],
+    }
 )

@@ -5,7 +5,7 @@ import time
 class PathPlanner:
     def __init__(self, vamp_env):
         self.vmp = vamp_env
-        self._vamp_env = vamp_env._env # TODO: Problem with passing the right vamp environment vamp.Environment()
+        self._vamp_env = vamp_env._env
         (self.vamp_module, self.planner_func, self.plan_settings,
          self.simp_settings) = vamp.configure_robot_and_planner_with_kwargs("stretch", "rrtc")
 
@@ -13,10 +13,11 @@ class PathPlanner:
         self.sampler = getattr(self.vamp_module, "halton")()
         self.sampler.skip(0)
 
-    def shortest_path(self, source, target, max_iterations=100000, restarts=0):
+    def shortest_path(self, source, target, vamp_env = None, max_iterations=100000, restarts=0):
         #print("PLANNING")
         t1 = time.time()
-        result = self.planner_func(source, target, self._vamp_env, self.plan_settings, self.sampler)
+        vamp_env = self._vamp_env if vamp_env is None else vamp_env 
+        result = self.planner_func(source, target, vamp_env, self.plan_settings, self.sampler)
         #print("DONE: ", time.time() - t1)
 
         if time.time() - t1 > 1.0:
