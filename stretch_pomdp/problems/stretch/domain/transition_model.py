@@ -163,11 +163,8 @@ class StretchTransitionModel(TransitionModel):
         next_position = self.move_if_valid_next_position(state.get_position, realized_action)
 
         env = self._vamp_env.state_to_vamp(state)
-        if self._vamp_env.collision_checker(list(next_position)[:11] + [0., 0.], env):
-            print("collision!")
+        if self._vamp_env.collision_checker(list(next_position)[:11] + [0., 0.], vamp_env=env):
             next_position = state.get_position
-        else:
-            print("no collision")
 
         return State(next_position,
                      state.get_obstacle_loc,

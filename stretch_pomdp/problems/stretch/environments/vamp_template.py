@@ -38,14 +38,19 @@ class VAMPEnv():
         # ====================================================
         # Assumes a single spherical goal region.
         self._goal = (1.0, [2.5, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
-        self.sphere_approx_radius = 0.1
+        self.sphere_approx_radius = 0.4
         # self.cylinder_height = 1
         # self.cylinder_euler = (0, 0, 1.16)
 
         self._landmarks = []
-        for i in range(-1, 4):
-            for j in range(-1, 4):
-                self._landmarks.append([[1, 1, 1], [float(i)/2.0, float(j)/2.0, 0], [0, 0, 0]])
+        land_pos = []
+        for i in range(1, 3):
+            for j in range(-1, 2):
+                self._landmarks.append([[1, 1, 1], [float(i), float(j), 0], [0, 0, 0]])
+                land_pos.append([float(i), float(j), 0])
+
+        rr.log("landmarks", rr.Points3D(land_pos, radii=0.1))
+
         #self._landmarks = [
         #    [[1, 1, 1], [2.0, 1.0, 0.0], [0, 0, 0]],
         #    [[1, 1, 1], [2.0, -1.0, 0.0], [0, 0, 0]],
@@ -62,7 +67,7 @@ class VAMPEnv():
         ]
 
         self.cuboids = []
-        self.spheres = []
+        self.spheres = [] # (self.sphere_approx_radius, (1.5, 0, 0))
         self.heightfields = []
         self.cylinders = []
         self.capsules = []
@@ -142,7 +147,8 @@ class VAMPEnv():
         # Upper bound 0.13
         # vamp_config = [config[0], config[1], config[2], config[3]]
         vamp_env = self._env if vamp_env is None else vamp_env
-        return not vamp.stretch.validate(config, vamp_env)
+        colliding_jnts = vamp.stretch.sphere_validity(config, vamp_env)
+        return len(colliding_jnts[0])
 
     def dz_checker(self, config):
         # work for axis aligned danger zone bounding box only

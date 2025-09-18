@@ -89,7 +89,7 @@ class POMDPManager(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        self.obstacle_loc = None # (1, 0, 0)
+        self.obstacle_loc = None # (1, 0, 0) 
 
         self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.obs_lst = []

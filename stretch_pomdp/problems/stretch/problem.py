@@ -32,7 +32,7 @@ def init_stretch_pomdp(init_pos,
     init_belief = pomdp_py.Particles(particles)
 
     # visualise belief
-    print(f"visualising initial beliefs")
+    # print(f"visualising initial beliefs")
     positions = []
     obstacle_positions = []
     for k, v in init_belief.get_histogram().items():

@@ -16,7 +16,9 @@ class PathPlanner:
     def shortest_path(self, source, target, vamp_env = None, max_iterations=100000, restarts=0):
         #print("PLANNING")
         t1 = time.time()
-        vamp_env = self._vamp_env if vamp_env is None else vamp_env 
+        if vamp_env is None:
+            raise Exception("a vamp_env is expected to pass in")
+        # vamp_env = self._vamp_env if vamp_env is None else vamp_env 
         result = self.planner_func(source, target, vamp_env, self.plan_settings, self.sampler)
         #print("DONE: ", time.time() - t1)
 
@@ -30,13 +32,13 @@ class PathPlanner:
                 break
 
             print(f"Trying restart attempt #{i}...")
-            result = self.planner_func(source, target, self._vamp_env, self.plan_settings, self.sampler)
+            result = self.planner_func(source, target, vamp_env, self.plan_settings, self.sampler)
 
         if result is None or result.size == 0:
             print(f"Warning: RRT-C failed to find a path despite {restarts} attempts!")
             return []
 
-        simple = self.vamp_module.simplify(result.path, self._vamp_env, self.simp_settings, self.sampler)
+        # simple = self.vamp_module.simplify(result.path, vamp_env, self.simp_settings, self.sampler)
 
         # path = [s.to_list()[:2]+[0.0] for s in simple.path]
         # src = source[:2] + [0.0]
@@ -48,7 +50,7 @@ class PathPlanner:
 
         #simple.path.interpolate(vamp.stretch.resolution())
 
-        return [s.to_list() for s in simple.path]
+        return [s.to_list() for s in result.path]
 
 def main():
     # TODO: Test the path planner for stretch here
