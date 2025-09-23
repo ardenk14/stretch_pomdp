@@ -54,13 +54,13 @@ class StretchPOMDP(basics.MPPOMDP):
 
         "Agent"
         a = basics.Agent(init_belief=init_belief,
-                             policy_model=self.Pm,
-                             transition_model=Tm,
-                             observation_model=Zm,
-                             reward_model=Rm,
-                             ref_policy_model=None,
-                             blackbox_model=None,
-                             macro_action_size=self.macro_action_size)
+                        policy_model=self.Pm,
+                        transition_model=Tm,
+                        observation_model=Zm,
+                        reward_model=Rm,
+                        ref_policy_model=None,
+                        blackbox_model=None,
+                        macro_action_size=self.macro_action_size)
 
         "Environment"
         e = basics.Environment(

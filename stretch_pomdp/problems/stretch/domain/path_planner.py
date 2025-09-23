@@ -5,7 +5,7 @@ import time
 class PathPlanner:
     def __init__(self, vamp_env):
         self.vmp = vamp_env
-        self._vamp_env = vamp_env._env
+        self._vamp_env = vamp_env.env
         (self.vamp_module, self.planner_func, self.plan_settings,
          self.simp_settings) = vamp.configure_robot_and_planner_with_kwargs("stretch", "rrtc")
 
@@ -38,7 +38,7 @@ class PathPlanner:
             print(f"Warning: RRT-C failed to find a path despite {restarts} attempts!")
             return []
 
-        # simple = self.vamp_module.simplify(result.path, vamp_env, self.simp_settings, self.sampler)
+        simple = self.vamp_module.simplify(result.path, vamp_env, self.simp_settings, self.sampler)
 
         # path = [s.to_list()[:2]+[0.0] for s in simple.path]
         # src = source[:2] + [0.0]
@@ -48,12 +48,11 @@ class PathPlanner:
         #print("TRGT: ", trgt)
         # rr.log("VAMP", rr.LineStrips3D(path))#, rr.Points3D([src, trgt]))
 
-        #simple.path.interpolate(vamp.stretch.resolution())
+        simple.path.interpolate(vamp.stretch.resolution())
 
-        return [s.to_list() for s in result.path]
+        return [s.to_list() for s in simple.path]
 
 def main():
-    # TODO: Test the path planner for stretch here
     pass
 
 if __name__ == '__main__':

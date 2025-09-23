@@ -6,7 +6,7 @@ import vamp
 import numpy as np
 import math
 from pomdp_py.utils.transformations import aabb_collision_check
-
+from pathlib import Path
 import rerun as rr
 
 def quaternion_from_euler(r, p, y):
@@ -28,7 +28,8 @@ def quaternion_from_euler(r, p, y):
 class VAMPEnv():
 
     def __init__(self,
-                 robot_init_config=(0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.),
+                 robot_init_config=(0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0, 0),
+                 lab_map_dir = None,
                  obstacle_loc = None,
                  debug=False,
                  resize=0):
@@ -37,19 +38,28 @@ class VAMPEnv():
         # Customize objects.
         # ====================================================
         # Assumes a single spherical goal region.
-        self._goal = (1.0, [2.5, 0.0, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self._goal = (1.0, [0.5, -0.5, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
         self.sphere_approx_radius = 0.4
         # self.cylinder_height = 1
         # self.cylinder_euler = (0, 0, 1.16)
 
         self._landmarks = []
-        land_pos = []
+        self.land_pos = []
         for i in range(1, 3):
             for j in range(-1, 2):
                 self._landmarks.append([[1, 1, 1], [float(i), float(j), 0], [0, 0, 0]])
-                land_pos.append([float(i), float(j), 0])
+                self.land_pos.append([float(i), float(j), 0])
+        
+        # experiment depth image
+        self.depth_img = np.zeros((4, 4))
+        self.depth_img[1:3, 1:3] = 255
+        # self.img_to_heightfield(self.depth_img)
 
-        rr.log("landmarks", rr.Points3D(land_pos, radii=0.1))
+        self.lab_map_path = lab_map_dir
+        self.lab_width = 380
+        self.lab_height = 400
+        self.scale_x = 3.8
+        self.scale_y = 4
 
         #self._landmarks = [
         #    [[1, 1, 1], [2.0, 1.0, 0.0], [0, 0, 0]],
@@ -60,20 +70,21 @@ class VAMPEnv():
         #]
 
         self._danger_zones = [
-            [[7, 1, 1], [6.0, -9.0, 4.0], [0, 0, 0]],
-            [[7, 1, 1], [6.0, -13.0, 4.0], [0, 0, 0]],
-            [[5, 0.8, 1], [6.0, 21.0, 4.0], [0, 0, 0]],
-            [[0.5, 2, 1], [-22.5, 1.0, 4.0], [0, 0, 0]],
+            # [[7, 1, 1], [6.0, -9.0, 4.0], [0, 0, 0]],
+            # [[7, 1, 1], [6.0, -13.0, 4.0], [0, 0, 0]],
+            # [[5, 0.8, 1], [6.0, 21.0, 4.0], [0, 0, 0]],
+            # [[0.5, 2, 1], [-22.5, 1.0, 4.0], [0, 0, 0]],
         ]
 
-        self.cuboids = []
+        self.cuboids = [[[0.9, 0.6, 0.5], [1, -1.4, 0.5], [0, 0, 0]],
+                        [[0.6, 0.75, 0.5], [1.3, 1.25, 0.5], [0, 0, 0]]]
         self.spheres = [] # (self.sphere_approx_radius, (1.5, 0, 0))
         self.heightfields = []
         self.cylinders = []
         self.capsules = []
         # ====================================================
 
-        self._env = vamp.Environment()
+        self.env = vamp.Environment()
         self.init_env()
 
     @property
@@ -106,6 +117,7 @@ class VAMPEnv():
 
     def visualize_key_features(self):
         """Customize to add key objects (e.g. danger zones, landmarks, goal, starting regions) to the GUI."""
+        rr.log("landmarks", rr.Points3D(self.land_pos, radii=0.1))
         centers = []
         radii = []
         for radius, center in self.spheres:
@@ -114,6 +126,23 @@ class VAMPEnv():
         rr.log("Obstacles", rr.Points3D(centers, radii=radii), static=True)
         rr.log("Goal", rr.Points3D(self._goal[1][:3], radii=0.1), static=True)
 
+        for i, (half_extents, center, euler) in enumerate(self.cuboids):
+            rr.log(["box", str(i)], rr.Boxes3D(half_sizes=half_extents, centers=center, fill_mode="solid"))
+
+        rr.log("box/plane", rr.Boxes3D(sizes=(3.8, 4., 0.1), centers=(0, 0, -0.05)))
+        rr.log("src", rr.Points3D([-0.5, 0.5, 0], radii=0.1))
+        rr.log("tgt", rr.Points3D([-0.5, -0.5, 0.0], radii=0.1))
+        return
+
+    def img_to_heightfield(self, img):
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                size = (1, 1, (255 - img[i, j]) / 255)
+                center = (i, j, 0.5)
+                if size[2] > 0:
+                    rr.log(["wall", str(i), str(j)], rr.Boxes3D(sizes=size, centers=center, colors=(125,125,125)))
+        return
+
     def get_landmarks_pos(self, include_goal=True):
         lms = [lm[1] + [0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0] for lm in self._landmarks]
         if include_goal:
@@ -121,8 +150,23 @@ class VAMPEnv():
         return lms
 
     def load_primitive_collision_objects(self):
-        for radius, center in self.spheres:
-            self._env.add_sphere(vamp.Sphere(center, radius))
+        for half_extents, center, euler in self.cuboids:
+            self.env.add_cuboid(vamp.Cuboid(center, euler, half_extents))
+        
+        if self.lab_map_path is not None:
+            print("loading a heightmap")
+            hf = vamp.png_to_heightfield(
+                self.lab_map_path,
+                (0, 0, 0.),
+                (1./self.lab_width * self.scale_x, 1./self.lab_height * self.scale_y, 1)
+            )
+            self.env.add_heightfield(hf)
+        return
+
+        # for radius, center in self.spheres:
+        #     self._env.add_sphere(vamp.Sphere(center, radius))
+
+        
 
         # print("CENTER: ", center)
         # print("RADIUS: ", radius)
@@ -146,9 +190,12 @@ class VAMPEnv():
         """ Returns True if in collision, False otherwise."""
         # Upper bound 0.13
         # vamp_config = [config[0], config[1], config[2], config[3]]
-        vamp_env = self._env if vamp_env is None else vamp_env
+        vamp_env = self.env if vamp_env is None else vamp_env
         colliding_jnts = vamp.stretch.sphere_validity(config, vamp_env)
-        return len(colliding_jnts[0])
+        for j in colliding_jnts:
+            if len(j):
+                return True
+        return False
 
     def dz_checker(self, config):
         # work for axis aligned danger zone bounding box only
@@ -169,3 +216,17 @@ class VAMPEnv():
 
     def goal_checker(self, config):
         return np.linalg.norm(np.array(config[0:2]) - np.array(self._goal[1][:2])) < 0.1#self._goal[0]
+    
+    def pb_visualiser(self):
+        from vamp import pybullet_interface as vpb
+        pb = vpb.PyBulletSimulator("", [], True)
+        pb.client.configureDebugVisualizer(pb.client.COV_ENABLE_GUI, 1)
+        pb.add_height_map(
+            self.lab_map_path,
+            self.lab_map_path,
+            scale = [1. / self.lab_width * self.scale_x, 1. / self.lab_height * self.scale_y, 1.],
+            center = [0, 0, 1./2.]
+        )
+        pb.add_sphere(radius = 0.1, position=self._goal[1][:3])
+        while True:
+            ...

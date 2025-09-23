@@ -22,6 +22,7 @@ setup(
             'pomdp_manager = stretch_pomdp.pomdp_manager:main',
             'action_follower = stretch_pomdp.action_follower:main',
             'lidar_manager = stretch_pomdp.lidar_manager:main',
+            'vamp_test=stretch_pomdp.vamp_test:main'
         ],
     },
    extras_require={
