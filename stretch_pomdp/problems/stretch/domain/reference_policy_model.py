@@ -100,6 +100,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         # find macro actions that resemble the shortest path
         # TODO: refine the approximation using continuous actions representation instead of discrete ones
         if len(path) < 2:
+            print("rrtc failed to find a path...")
             return MacroAction([])
         return self.path_to_macro_action(state, path)
 

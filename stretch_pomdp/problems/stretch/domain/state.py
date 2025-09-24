@@ -4,10 +4,10 @@ import numpy as np
 
 class State(basics.State):
     EPSILON = 0.01
-    UPPER_BOUNDS = np.array([5, 5, 2*np.pi, 1.1, 0.13, 0.13, 0.13, 0.13, 0, 0, 0, 0, 0])#np.array([5, 5, 2*np.pi, 0, 0, 0, 0, 0, 0, 0, 0])
+    UPPER_BOUNDS = np.array([5, 5, 2*np.pi, 1.1, 0.13, 0.13, 0.13, 0.13, 0, 0, 0, 0, 0]) # np.array([5, 5, 2*np.pi, 0, 0, 0, 0, 0, 0, 0, 0])
     LOWER_BOUNDS = np.array([-5, -5, -2*np.pi, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
-    def __init__(self, position, obstacle_loc, danger_zone, landmark, goal):
+    def __init__(self, position, obstacle_loc, danger_zone, goal):
         """
         position (numpy array): The state position (x, y, theta, lift, extenstion, wrist_yaw, wrist_pitch, wrist_roll, head_pan, head_tilt, gripper)).
         danger_zone (bool): The robot is at a danger zone.
@@ -19,7 +19,7 @@ class State(basics.State):
         self._obstacle_loc = obstacle_loc
         self._terminal = danger_zone or goal
         self._danger_zone = danger_zone
-        self._landmark = landmark
+        # self._landmark = landmark
         self._goal = goal
         self._hash = hash((tuple(self._position), tuple(self._obstacle_loc)))
 
@@ -42,7 +42,7 @@ class State(basics.State):
             return False
 
     def __str__(self):
-        return f"<pos: {self._position} | dz: {self._danger_zone} | lm: {self._landmark} | goal: {self._goal}>"
+        return f"<pos: {self._position} | dz: {self._danger_zone} | goal: {self._goal}>"
 
     def __repr__(self):
         return self.__str__()

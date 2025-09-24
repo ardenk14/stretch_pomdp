@@ -51,6 +51,7 @@ class TestVAMPEnv():
     
 def main():
     # general collision test
+    print("Tests begin...")
     e = TestVAMPEnv()
     validate_stat = e.validate_test()
     print(f"collision percentage in EMPTY vamp scene (stretch validate), expect 0 but got: {validate_stat}")
@@ -72,18 +73,14 @@ def main():
     env.visualize_key_features()
 
     pp = PathPlanner(env)
-    source = [-0.5, 0.5, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.]
-    target = [-0.5, -0.5, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+    source = [-0.84, -1.26, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+    target = [1.5, -0., 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.]
     s_collision = env.collision_checker(source)
     t_collision = env.collision_checker(target)
     if s_collision or t_collision:
         print(f"collision of source {s_collision} or target {t_collision}")
     else:
         print("no collision")
-
-    wall_center = [1.3, 1.25, 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.]
-    wall_center_collide = env.collision_checker(wall_center)
-    print(f"Stretch should collide with wall, got {wall_center_collide}")
 
     path = pp.shortest_path(source, target, vamp_env=env.env)
     print(path)

@@ -41,6 +41,39 @@ import tf2_ros
 from tf2_ros import TransformException
 import time
 
+def yaw_to_quaternion(yaw):
+    """Convert yaw angle to quaternion"""
+    cy = math.cos(yaw * 0.5)
+    sy = math.sin(yaw * 0.5)
+    cp = math.cos(0.0)
+    sp = math.sin(0.0)
+    cr = math.cos(0.0)
+    sr = math.sin(0.0)
+    
+    qw = cy * cp * cr + sy * sp * sr
+    qx = cy * cp * sr - sy * sp * cr
+    qy = cy * sp * cr + sy * cp * sr
+    qz = sy * cp * cr - cy * sp * sr
+    # Update vamp_env
+    #print(problem.policty.root)
+    
+    return qx, qy, qz, qw
+
+def quaternion_to_yaw(quaternion):
+    """Convert quaternion to yaw angle (rotation around z-axis)"""
+    # Extract the yaw angle from the quaternion
+    # This is a simplified conversion assuming the robot moves in a plane
+    siny_cosp = 2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y)
+    cosy_cosp = 1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z)
+    yaw = math.atan2(siny_cosp, cosy_cosp)
+    return yaw
+    
+def yaw_to_rotation(yaw):
+    result = np.array([[math.cos(yaw), -math.sin(yaw), 0],
+                       [math.sin(yaw), math.cos(yaw), 0],
+                       [0, 0, 1]])
+    return result
+
 
 class POMDPManager(Node):
     def __init__(self):
@@ -89,9 +122,10 @@ class POMDPManager(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        self.obstacle_loc = None # (1, 0, 0) 
+        # obstacle location relative to robots frame
+        self.obstacle_transform = None # (1, 0, 0)
 
-        self.current_config = np.array([0., 0., 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self.current_config = np.array([0.0, 0.0, 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0, 0])
         self.obs_lst = []
         self.acts_lst = []
         self.current_trajectory = None
@@ -109,14 +143,17 @@ class POMDPManager(Node):
         self.last_w = 0.0
         self.last_t = None
 
-        self.vamp_env = VAMPEnv(obstacle_loc=self.obstacle_loc)
+        self.vamp_env = VAMPEnv()
+        self.vamp_env.visualize_key_features()
         self._Tm = StretchTransitionModel(self.vamp_env)
         self.problem = None
+        self.abs_stretch_pos = self.current_config[:2] + self.vamp_env.robot_to_world
+        self.abs_stretch_yaw = self.current_config[2] + self.vamp_env.robot_yaw_to_world_yaw
 
         self.planner = pomdp_py.ROPRAS3(
             planning_time=2,
-            max_depth=20,
-            rollout_depth=20,
+            max_depth=50,
+            rollout_depth=50,
             eta=0.2,
             ref_policy_heuristic='uniform',
             use_prm=False
@@ -130,32 +167,29 @@ class POMDPManager(Node):
 
     def _get_obstacle_transform(self):
         try:
-            # Look up transform between the base_link and requested ArUco tag
             transform = self.tf_buffer.lookup_transform('base_link',
                                                         'cube',
                                                         Time())
 
-            self.obstacle_loc = [transform.transform.translation.x,
-                                 transform.transform.translation.y,
-                                 0] # we use cylinder to approximate anything, hence we assume things are connected to the ground
+            self.obstacle_transform = [transform.transform.translation.x,
+                                       transform.transform.translation.y]
         except TransformException as ex:
             pass
 
     def odom_callback(self, msg):
-        def quaternion_to_yaw(quaternion):
-            """Convert quaternion to yaw angle (rotation around z-axis)"""
-            # Extract the yaw angle from the quaternion
-            # This is a simplified conversion assuming the robot moves in a plane
-            siny_cosp = 2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y)
-            cosy_cosp = 1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z)
-            yaw = math.atan2(siny_cosp, cosy_cosp)
-            return yaw
         current_pose = msg.pose.pose
         self.current_config[0] = current_pose.position.x
         self.current_config[1] = current_pose.position.y
         self.current_config[2] = quaternion_to_yaw(current_pose.orientation)
-        rr.log("Current_Pos", rr.Arrows3D(origins=list(self.current_config[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 0.2]))
-
+        self.abs_stretch_pos = self.current_config[:2] + self.vamp_env.robot_to_world
+        self.abs_stretch_yaw = self.current_config[2] + self.vamp_env.robot_yaw_to_world_yaw
+        yaw_rot = yaw_to_rotation(self.current_config[2])
+        base = yaw_to_rotation(math.pi / 2)
+        x_vector = base @ yaw_rot @ np.array([1, 0, 0])
+        y_vector = base @ yaw_rot @ np.array([0, 1, 0]) 
+        rr.log("Current_Pos_X", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=x_vector, colors=[0.2, 1.0, 0.2]))
+        rr.log("Current_Pos_Y", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=y_vector, colors=[0.2, 1.0, 0.2]))
+        rr.log("Current_Pos_Z", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 0.2]))
         v = msg.twist.twist.linear.x
         w = msg.twist.twist.angular.z
         t = Time.from_msg(msg.header.stamp)
@@ -207,24 +241,6 @@ class POMDPManager(Node):
     def goal_config_callback(self, msg):
         pass
 
-    def yaw_to_quaternion(self, yaw):
-        """Convert yaw angle to quaternion"""
-        cy = math.cos(yaw * 0.5)
-        sy = math.sin(yaw * 0.5)
-        cp = math.cos(0.0)
-        sp = math.sin(0.0)
-        cr = math.cos(0.0)
-        sr = math.sin(0.0)
-        
-        qw = cy * cp * cr + sy * sp * sr
-        qx = cy * cp * sr - sy * sp * cr
-        qy = cy * sp * cr + sy * cp * sr
-        qz = sy * cp * cr - cy * sp * sr
-        # Update vamp_env
-        #print(problem.policty.root)
-        
-        return qx, qy, qz, qw
-
     def control_loop(self):
         thread = threading.Thread(target=self._run_control_loop)
         thread.daemon = True
@@ -239,9 +255,12 @@ class POMDPManager(Node):
         """ Run the POMDP Planner """
         if self.problem is None:
             print("WAITING FOR ENVIRONMENT INITIALIZATION")
-            if self.obstacle_loc is not None:
-                print(f"obstacle_loc is: {self.obstacle_loc}")
-                self.problem = init_stretch_pomdp(self.current_config, self.obstacle_loc, self.vamp_env)
+            if self.obstacle_transform is not None:
+                init_pos = self.current_config
+                init_pos[:2] = self.abs_stretch_pos
+                init_pos[2] = self.abs_stretch_yaw
+                obstacle_loc = self.vamp_env.rPw @ np.array(list(self.obstacle_transform) + [1.])
+                self.problem = init_stretch_pomdp(init_pos, obstacle_loc[:2], self.vamp_env)
             else:
                 return
 
@@ -329,10 +348,6 @@ class POMDPManager(Node):
         self.action_pub.publish(msg)
 
         # VISUALIZATIONS ------------------------------------------------------------------------------------
-
-        # Visualize obstacles
-        self.vamp_env.visualize_key_features()
-
         # Visualize current belief
         #positions = []
         #for k, v in self.problem.agent.tree.belief.get_histogram().items():
