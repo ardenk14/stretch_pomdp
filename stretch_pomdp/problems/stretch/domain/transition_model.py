@@ -162,13 +162,14 @@ class StretchTransitionModel(TransitionModel):
         realized_action = Action(realized_action._name, v_noise = np.random.normal(0, 0.03), w_noise = np.random.normal(0, 0.07))
         next_position = self.move_if_valid_next_position(state.get_position, realized_action)
 
-        # env = self._vamp_env.state_to_vamp(state)
-        # if self._vamp_env.has_collision_sphere(list(next_position)[:11] + [0., 0.], vamp_env=env):
-        #     next_position = state.get_position
+        env = self._vamp_env.state_to_vamp(state)
+        collide = self._vamp_env.has_collision(list(next_position)[:11] + [0., 0.], vamp_env=env)
+        if collide:
+            next_position = state.get_position
 
         return State(next_position,
                      state.get_obstacle_loc,
-                     self._vamp_env.dz_checker(next_position),
+                     collide,
                      self._vamp_env.goal_checker(next_position))
 
     def get_all_actions(self):

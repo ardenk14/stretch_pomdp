@@ -33,7 +33,7 @@ class VAMPEnv():
                  obstacle_loc = None,
                  debug=False,
                  resize=0):
-        vamp.sphere.set_radius(0.3)
+        # vamp.sphere.set_radius(0.3)
         # 2d homogeneous transformation matrix
         self.robot_to_world = np.array([-0.9, -1.4])
         self.robot_yaw_to_world_yaw = math.pi / 2
@@ -45,19 +45,19 @@ class VAMPEnv():
         # Customize objects.
         # ====================================================
         # Assumes a single spherical goal region.
-        self._goal = (1.0, [-0.9, 1.3, 0.0, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
-        self.sphere_approx_radius = 0.2
+        self._goal = (1.0, [-0.9, 1.3, self.robot_yaw_to_world_yaw, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+        self.sphere_approx_radius = 0.25
         # self.cylinder_height = 1
         # self.cylinder_euler = (0, 0, 1.16)
 
-        self._landmarks = [[-0.48, 0, 0,],
-                           [-1.43, 0, 0,],
-                           [0.48, 0, 0,],
-                           [1.43, 0, 0],
-                           [-0.48, 1, 0,],
-                           [-1.43, 1, 0,],
-                           [-0.48, -1, 0,],
-                           [-1.43, -1, 0,],]
+        self._landmarks = [[-0.48, 0, self.robot_yaw_to_world_yaw,],
+                           [-1.43, 0, self.robot_yaw_to_world_yaw,],
+                           [0.48, 0, self.robot_yaw_to_world_yaw,],
+                           [1.43, 0, self.robot_yaw_to_world_yaw],
+                           [-0.48, 1, self.robot_yaw_to_world_yaw,],
+                           [-1.43, 1, self.robot_yaw_to_world_yaw,],
+                           [-0.48, -1, self.robot_yaw_to_world_yaw,],
+                           [-1.43, -1, self.robot_yaw_to_world_yaw,],]
         
         # experiment depth image
         self.depth_img = np.zeros((4, 4))
@@ -85,8 +85,8 @@ class VAMPEnv():
             # [[0.5, 2, 1], [-22.5, 1.0, 4.0], [0, 0, 0]],
         ]
 
-        self.cuboids = [[[0.9, 0.6, 0.5], [1, -1.4, 0.5], [0, 0, 0]],
-                        [[0.5, 0.6, 0.5], [1.3, 1.25, 0.5], [0, 0, 0]]]
+        self.cuboids = [[[0.9, 0.6, 0.5], [1, -1.4, 0.], [0, 0, 0]],
+                        [[0.5, 0.6, 0.5], [1.3, 1.25, 0.], [0, 0, 0]]]
         self.spheres = [] # (self.sphere_approx_radius, (1.5, 0, 0))
         self.heightfields = []
         self.cylinders = []
@@ -137,7 +137,7 @@ class VAMPEnv():
             centers.append(center)
             radii.append(radius)
         rr.log("Obstacles", rr.Points3D(centers, radii=radii), static=True)
-        rr.log("Goal", rr.Points3D(self._goal[1][:3], radii=0.1), static=True)
+        rr.log("Goal", rr.Points3D(list(self._goal[1][:2])+[0.], radii=0.1), static=True)
         # rr.log("Start", rr.Points3D(self.get_robot_init_config[:3], radii=0.1), static=True)
 
         for i, (half_extents, center, euler) in enumerate(self.cuboids):
@@ -164,6 +164,8 @@ class VAMPEnv():
     def load_primitive_collision_objects(self):
         for half_extents, center, euler in self.cuboids:
             self.env.add_cuboid(vamp.Cuboid(center, euler, half_extents))
+
+        # self.env.add_sphere(vamp.Sphere((0,0,0), 0.3))
         
         if self.lab_map_path is not None:
             print("loading a heightmap")
@@ -209,7 +211,7 @@ class VAMPEnv():
                 return True
         return False
     
-    def collision_validate(self, config, vamp_env = None):
+    def has_collision(self, config, vamp_env = None):
         vamp_env = self.env if vamp_env is None else vamp_env
         return not vamp.stretch.validate(config, vamp_env)
     
@@ -226,9 +228,6 @@ class VAMPEnv():
         for sphere in self.spheres:
             if np.linalg.norm(np.array(config[0:2]) - np.array(sphere[1])[:2]) < sphere[0]:
                 return True
-        #for half_extent, center, _ in self._danger_zones:
-        #    if aabb_collision_check(half_extent, center, config[:3]):
-        #        return True
         return False
 
     def lm_checker(self, config):
@@ -295,15 +294,16 @@ def read_robot_params_gui(robot_params_gui, vmp_env):
 def main():
     env_gui = VAMPEnv()
     env_gui.load_pb_visualiser()
-    env_gui.pb.add_sphere(0.3,  env_gui.get_robot_init_config[:3], None, "blue")
+    # env_gui.pb.add_sphere(0.3,  env_gui.get_robot_init_config[:3], None, "blue")
     idx = env_gui.pb.add_sphere(0.3,  env_gui.get_robot_init_config[:3], None, "red")
+    # env_gui.pb.add_sphere(0.3, (0,0,0))
     robot_params_gui = create_robot_params_gui(env_gui)
 
     while True:
         config = read_robot_params_gui(robot_params_gui, env_gui)
         env_gui.pb.update_object_position(idx, config[:3])
         robot_config = list(config[:3]) + [0.5, 0., 0., 0., 0., 0., 0., 0., 0, 0]
-        collision = env_gui.has_collision_sphere(robot_config)
+        collision = env_gui.has_collision(robot_config)
         print(f"collision: {collision}")
 
 if __name__ == "__main__":

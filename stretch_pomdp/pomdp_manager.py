@@ -29,6 +29,7 @@ from stretch_pomdp.problems.stretch.domain.state import State
 from stretch_pomdp.problems.stretch.domain.action import MacroAction
 from stretch_pomdp.problems.stretch.domain.transition_model import StretchTransitionModel
 from stretch_pomdp.problems.stretch.environments.vamp_template import VAMPEnv
+from stretch_pomdp.problems.stretch.domain.path_planner import PathPlanner
 #from pomdp_py.framework.basics import MPPOMDP, sample_explicit_models
 from pomdp_py.framework.basics import MacroObservation
 from std_msgs.msg import Float64MultiArray
@@ -78,7 +79,6 @@ def yaw_to_rotation(yaw):
 class POMDPManager(Node):
     def __init__(self):
         super().__init__('vamp_manager')
-
         rr.init("stretch_pomdp")
         server_uri = rr.serve_grpc()
         rr.serve_web_viewer(connect_to=server_uri)
@@ -124,6 +124,7 @@ class POMDPManager(Node):
 
         # obstacle location relative to robots frame
         self.obstacle_transform = None # (1, 0, 0)
+        self.abs_obstacle_loc = None
 
         self.current_config = np.array([0.0, 0.0, 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0, 0])
         self.obs_lst = []
@@ -159,6 +160,8 @@ class POMDPManager(Node):
             use_prm=False
         )
 
+        self.pp = PathPlanner(self.vamp_env)
+
         # Create timer for control loop
         self.aruco_timer = self.create_timer(1, self._get_obstacle_transform)
         self.detect_loop()
@@ -181,15 +184,17 @@ class POMDPManager(Node):
         self.current_config[0] = current_pose.position.x
         self.current_config[1] = current_pose.position.y
         self.current_config[2] = quaternion_to_yaw(current_pose.orientation)
-        self.abs_stretch_pos = self.current_config[:2] + self.vamp_env.robot_to_world
+        odom_pos = self.vamp_env.rPw @ np.array(list(self.current_config[:2])+[1.])
+        self.abs_stretch_pos[0] = odom_pos[0]
+        self.abs_stretch_pos[1] = odom_pos[1] 
         self.abs_stretch_yaw = self.current_config[2] + self.vamp_env.robot_yaw_to_world_yaw
         yaw_rot = yaw_to_rotation(self.current_config[2])
         base = yaw_to_rotation(math.pi / 2)
         x_vector = base @ yaw_rot @ np.array([1, 0, 0])
         y_vector = base @ yaw_rot @ np.array([0, 1, 0]) 
-        rr.log("Current_Pos_X", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=x_vector, colors=[0.2, 1.0, 0.2]))
-        rr.log("Current_Pos_Y", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=y_vector, colors=[0.2, 1.0, 0.2]))
-        rr.log("Current_Pos_Z", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 0.2]))
+        rr.log("Current_Pos_X", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=x_vector, colors=[84, 255, 252]))
+        rr.log("Current_Pos_Y", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=y_vector, colors=[84, 255, 252]))
+        rr.log("Current_Pos_Z", rr.Arrows3D(origins=list(self.abs_stretch_pos)+[0.0], vectors=[0., 0., 1.], colors=[84, 255, 252]))
         v = msg.twist.twist.linear.x
         w = msg.twist.twist.angular.z
         t = Time.from_msg(msg.header.stamp)
@@ -209,6 +214,11 @@ class POMDPManager(Node):
         act_len = len(Action("None")._motion)
         action = flat_data[:act_len]
         observation = flat_data[act_len:]
+        #transform to global coordinates
+        pos_o = self.vamp_env.rPw @ np.array(list(observation[:2])+[1.])
+        observation[0] = pos_o[0]
+        observation[1] = pos_o[1] 
+        observation[2] = observation[2] + self.vamp_env.robot_yaw_to_world_yaw
         act = Action("None")
         for k, v in act.MOTIONS.items():
             if list(v) == list(action):
@@ -259,11 +269,12 @@ class POMDPManager(Node):
                 init_pos = self.current_config
                 init_pos[:2] = self.abs_stretch_pos
                 init_pos[2] = self.abs_stretch_yaw
-                obstacle_loc = self.vamp_env.rPw @ np.array(list(self.obstacle_transform) + [1.])
-                self.problem = init_stretch_pomdp(init_pos, obstacle_loc[:2], self.vamp_env)
+                self.abs_obstacle_loc = self.vamp_env.rPw @ np.array(list(self.obstacle_transform) + [1.])
+                self.problem = init_stretch_pomdp(init_pos, self.abs_obstacle_loc[:2], self.vamp_env)
             else:
                 return
 
+        print("==================")
         print("BEGIN CONTROL LOOP")
         # Update vamp_env
         #print(problem.policty.root)
@@ -281,7 +292,17 @@ class POMDPManager(Node):
             action = MacroAction(action)
             print("ACT: ", action)
             print("OBS: ", observation)
-            state = State(self.current_config, False, False, False)
+            config = self.current_config 
+            config[:2] = self.abs_stretch_pos
+            config[2] = self.abs_stretch_yaw
+            state = State(config, 
+                          self.abs_obstacle_loc,
+                          self.vamp_env.dz_checker(config), 
+                          self.vamp_env.goal_checker(config))
+            
+            if state.is_goal:
+                print("Done!")
+                self.control_timer.cancel() 
 
             # Update history and belief
             self.problem.agent.update_history(action, observation)
@@ -292,14 +313,13 @@ class POMDPManager(Node):
             print(f"Belief update time: {belief_time}")
 
             # Visualize current belief
-            positions = []
-            obstacle_positions = []
-            for k, v in self.problem.agent.tree.belief.get_histogram().items():
-                positions.append(list(k.get_position[:2]) + [0.0])
-                print(f"belief particle obstacle loc: {k.get_obstacle_loc}")
-                obstacle_positions.append(list(k.get_obstacle_loc))
-                
-            rr.log("current_pos_belief", rr.Points3D(np.array(positions)))
+            bel = self.problem.agent.belief
+            for i, (k, v) in enumerate(bel.get_histogram().items()):
+                robot_pos = list(k.get_position[:2]) + [0.]
+                rr.log(["stretch_pos_belief", str(i)], rr.Points3D(robot_pos, radii=0.05, colors=[255, 247, 28]))
+                # obstacle_pos = list(k.get_obstacle_loc) + [0.]
+                # rr.log(["obstacle_pos_belief", str(i)], rr.Points3D(obstacle_pos, radii=vamp_env.sphere_approx_radius, colors=[28, 111, 255]))
+
             # cylinder_radius = [self.problem._vamp_env.cylinder_approx_radius] * len(obstacle_positions)
             # cylinder_length = [self.problem._vamp_env.cylinder_height] * len(obstacle_positions)
             # cylinder_euler = [self.problem._vamp_env.cylinder_euler] * len(obstacle_positions)
@@ -392,6 +412,8 @@ class POMDPManager(Node):
 
         # Visualize actions to be taken
         position = self.current_config
+        position[:2] = self.abs_stretch_pos
+        position[2] = self.abs_stretch_yaw
         origins = []
         vectors = []
         for act in action.action_sequence:
@@ -403,7 +425,27 @@ class POMDPManager(Node):
             vectors[-1][-1] = 0.0
             position = next_position
         rr.log("Taken_Action", rr.Arrows3D(origins=origins, vectors=vectors, colors=[0.0, 0.5, 1.0]))
+
+        # Visualise path to goal
+        # src_config = self.current_config
+        # src_config[:2] = self.abs_stretch_pos
+        # src_config[2] = self.abs_stretch_yaw
+        # temp_vmp_env = self.vamp_env.env
+        # temp_vmp_env.add_sphere(vamp.Sphere(self.abs_obstacle_loc, self.vamp_env.sphere_approx_radius))
+        # goal_path = self.pp.shortest_path(src_config, self.vamp_env.get_goal_pos, temp_vmp_env)
+        # to_goal_vectors = []
+        # to_goal_origins = []
+        # for i in range(len(goal_path) - 1):
+        #     origin = list(goal_path[i][:2]) + [0.]
+        #     next_point = list(goal_path[i+1][:2]) + [0.]
+        #     vector = np.array(next_point) - np.array(origin)
+        #     to_goal_origins.append(origin)
+        #     to_goal_vectors.append(vector)
+        # print(f"path to goal length: {len(goal_path)}")
+
+        # rr.log(["path_to_goal"], rr.Arrows3D(origins=to_goal_origins, vectors=to_goal_vectors, colors = [255, 51, 204]))
         print("END CONTROL LOOP")
+        print("==================\n")
 
 
 def main(args=None):

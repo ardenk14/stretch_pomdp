@@ -6,7 +6,7 @@ import numpy as np
 
 class StretchRewardModel(RewardModel):
 
-    STEP_REWARD = -3.0 #-0.1 # The step penalty for non-terminal states.
+    STEP_REWARD = -1.0 #-0.1 # The step penalty for non-terminal states.
     DZ_REWARD = -800.0#-800 # The collision penalty.
     GOAL_REWARD = 800.0  # The goal reward.
 
