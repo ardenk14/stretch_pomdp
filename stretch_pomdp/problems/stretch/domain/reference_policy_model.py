@@ -30,7 +30,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         self._Om = StretchObservationModel(vamp_env)
         self._path_planner = pp.PathPlanner(vamp_env)
         self._visual_shortest_path = visual_shortest_path
-        self.max_nodes = 8
+        self.max_nodes = 5
         self.finite_ref_actions = finite_ref_actions
         self.all_ref_actions = []
         # pre-fill the reference actions with primitive ones
@@ -88,7 +88,9 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             if p < 0.5:
                 sampled_lm = lm_pos[-1]
             else:
-                sampled_lm = lm_pos[np.random.choice(len(lm_pos)-1)]
+                sampled_idx = np.random.choice(len(lm_pos)-1)
+                #print(f"sampled index: {sampled_idx}")
+                sampled_lm = lm_pos[sampled_idx]
 
         state_pos = list(state.get_position)[:11] + [0., 0.]
 
@@ -178,46 +180,38 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
         """
         raise NotImplementedError
 
-    def dynamic_entropy_sample(self, state: State, h, use_prm=False):
+    def dynamic_entropy_sample(self, state: State, h = None, use_prm=False):
         """
-        Dynamic adjust milestone weights depends on the entropy of the belief. When the entropy is high,
-        we sample more towards nearby landmarks to localise, otherwise we sample towards the goal.
+        Sample landmarks according to the probability of how far the landmarks are 
+        from the moving obstacle. 
         :param state: state sampled from a belief
         :param h: entropy of the belief
         :param use_prm: use pre-computed prm if true, use rrtc otherwise
         :return: macro actions
         """
-        h = np.clip(h, 0, 1)
-
-        # compute all landmark positions
         lm_pos = self._vamp_env.get_landmarks_pos()
-        distances = [np.linalg.norm(np.array(state.get_position[:2]) - np.array(p[:2])) for p in lm_pos]
-        distances -= np.max(distances)
-        distances /= sum(distances)
+        if np.random.uniform(0,1) < 0.5:
+            sampled_lm = lm_pos[-1]
+        else:
+            # compute the distances from landmarks to goal
+            other_lms = lm_pos[:-1]
+            w = [np.linalg.norm(np.array(l[:2]) - np.array(state.get_obstacle_loc)) for l in other_lms]
+            w = np.array(w)
+            w /= np.sum(w)
+            sampled_lm = other_lms[np.random.choice(len(other_lms), p = w)]
 
-        # compute mixture of probabilities weighted by entropy
-        g = np.zeros(len(distances))
-        g[-1] = 1
-        w = h * np.array(distances) + (1 - h) * g
-
-        # sample a milestone according to above probability
-        sampled_idx = np.random.choice(len(lm_pos), p=w)
-        sampled_lm = lm_pos[sampled_idx]
         state_pos = list(state.get_position)[:11] + [0., 0.]
-        #print("SAMPLED LM: ", sampled_lm)
-        #print("STATE: ", state_pos)
-        vamp_env = self._vamp_env.state_to_vamp(state)
-        path = self._path_planner.shortest_path(state_pos, list(np.array(sampled_lm)), vamp_env=vamp_env)[:self.max_nodes]
-
+        sim_vamp_env = self._vamp_env.state_to_vamp(state)
+        start = time.time()
+        path = self._path_planner.shortest_path(state_pos, np.array(sampled_lm), vamp_env=sim_vamp_env)[:self.max_nodes]
+        self.rrtc_time += time.time() - start
         if len(path) < 2:
-            return MacroAction([])
-
+            return MacroAction([]) # TODO: make sure the reward for empty action is taking into account, should not be zero
         return self.path_to_macro_action(state, path)
 
 
     def path_to_macro_action(self, state, path):
         
-
         """def get_lookahead_point(path, current_pos, lookahead_dist, last_lookahead_idx):
             pos = np.array(current_pos[:2])
     
@@ -280,7 +274,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 end = path[-1]
                 return (end[0], end[1], end[2])
 
-            # Step 2: walk forward along the path from closest point
+            # Step 2: walk forward along the path from closest point by lookahead dist
             remaining = lookahead_dist
             i = closest_idx
             t = closest_t
@@ -359,7 +353,22 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 v = action._motion[0]
                 w = action._motion[1]
 
+                # Option 1: use transition model to get better prediction, but time consuming
                 predicted_pose = self._Tm.get_next_position(current_pose, action)
+
+                # Option 2: assume the linear velocity and control is perfect
+                # predicted_pose = current_pose 
+                # if not action.motion[1]:
+                #     # zero angular velocity case -- straight line
+                #     predicted_pose[0] = predicted_pose[0] + action.motion[0] * action.T * math.cos(predicted_pose[2])
+                #     predicted_pose[1] = predicted_pose[1] + action.motion[0] * action.T * math.sin(predicted_pose[2])
+                # else:
+                #     # arc case
+                #     new_yaw = predicted_pose[2] + action.motion[1] * action.T 
+                #     predicted_pose[0] = predicted_pose[0] + action.motion[0] / action.motion[1] * (math.sin(new_yaw) - math.sin(predicted_pose[2]))
+                #     predicted_pose[1] = predicted_pose[1] - action.motion[0] / action.motion[1] * (math.cos(new_yaw) - math.cos(predicted_pose[2]))
+                #     predicted_pose[2] = new_yaw
+                
 
                 if np.array_equal(predicted_pose, current_pose):
                     continue
@@ -369,7 +378,8 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
                 if cost < best_cost:
                     best_cost = cost
                     best_action = action
-                    best_new_pose = predicted_pose#self._Tm.get_next_position(current_pose, action)
+                    best_new_pose = predicted_pose #self._Tm.get_next_position(current_pose, action)
+
 
             #if best_action is None:
             #    print("No suitable macro action found. Stopping.")
@@ -388,6 +398,7 @@ class StretchReferencePolicyModel(pomdp_py.RolloutPolicy):
             nodes.append(self._Tm.get_next_position(nodes[-1], action))
 
         rr.log("Macro_Actions", rr.LineStrips3D([list(n[:2]) + [0.0] for n in nodes]))
+        rr.log("Phantom Obj", rr.Points3D(list(state.get_obstacle_loc)+[0.], radii=self._vamp_env.sphere_approx_radius, colors=[245, 37, 58]))
 
         actions.extend([Action("None"), Action("None")])
         return MacroAction(actions)

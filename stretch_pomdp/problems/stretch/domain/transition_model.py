@@ -2,9 +2,9 @@ import random
 from pomdp_py.framework.basics import TransitionModel
 from stretch_pomdp.problems.stretch.domain.action import Action
 from stretch_pomdp.problems.stretch.domain.state import State
+from copy import deepcopy
 import numpy as np
 import math
-
 import rerun as rr
 
 np.set_printoptions(precision=3, suppress=True)  # for neat printing of numpy arrays.
@@ -23,6 +23,8 @@ class StretchTransitionModel(TransitionModel):
         self.vls = []
         self.ts = []
         self.true_t = 0
+
+        self.obj_vel_x = 0.1
 
     def next(self, v0, w0, v_goal, w_goal, theta_start, T, dt=0.1):
         x, y, theta = 0.0, 0.0, theta_start
@@ -94,8 +96,8 @@ class StretchTransitionModel(TransitionModel):
                             + icc_y - y)
 
             # Update position
-            x += delta_x#v0 * math.cos(theta) * dt
-            y += delta_y#v0 * math.sin(theta) * dt
+            x += delta_x #v0 * math.cos(theta) * dt
+            y += delta_y #v0 * math.sin(theta) * dt
             theta += delta_theta#w0 * dt
 
             # Normalize final heading
@@ -158,19 +160,30 @@ class StretchTransitionModel(TransitionModel):
         if state.terminal:
             return state
 
+        # move stretch
         realized_action = action
         realized_action = Action(realized_action._name, v_noise = np.random.normal(0, 0.03), w_noise = np.random.normal(0, 0.07))
         next_position = self.move_if_valid_next_position(state.get_position, realized_action)
+        
+        # move object
+        new_obs_loc = deepcopy(state.get_obstacle_loc)
+        new_obs_loc[0] += self.obj_vel_x
 
-        env = self._vamp_env.state_to_vamp(state)
+        # check collision
+        new_state = State(next_position,
+                          new_obs_loc,
+                          False,
+                          self._vamp_env.goal_checker(next_position))
+        
+        env = self._vamp_env.state_to_vamp(new_state)
         collide = self._vamp_env.has_collision(list(next_position)[:11] + [0., 0.], vamp_env=env)
-        if collide:
-            next_position = state.get_position
+        if not collide:
+            return new_state
 
-        return State(next_position,
+        return State(state.get_position,
                      state.get_obstacle_loc,
                      collide,
-                     self._vamp_env.goal_checker(next_position))
+                     state.is_goal)
 
     def get_all_actions(self):
         return self.ACTIONS

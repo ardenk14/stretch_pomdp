@@ -46,18 +46,23 @@ class VAMPEnv():
         # ====================================================
         # Assumes a single spherical goal region.
         self._goal = (1.0, [-0.9, 1.3, self.robot_yaw_to_world_yaw, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0.])
-        self.sphere_approx_radius = 0.25
+        self.sphere_approx_radius = 0.2
         # self.cylinder_height = 1
         # self.cylinder_euler = (0, 0, 1.16)
 
-        self._landmarks = [[-0.48, 0, self.robot_yaw_to_world_yaw,],
-                           [-1.43, 0, self.robot_yaw_to_world_yaw,],
-                           [0.48, 0, self.robot_yaw_to_world_yaw,],
-                           [1.43, 0, self.robot_yaw_to_world_yaw],
-                           [-0.48, 1, self.robot_yaw_to_world_yaw,],
-                           [-1.43, 1, self.robot_yaw_to_world_yaw,],
-                           [-0.48, -1, self.robot_yaw_to_world_yaw,],
-                           [-1.43, -1, self.robot_yaw_to_world_yaw,],]
+        # self._landmarks = [[-0.48, 0, self.robot_yaw_to_world_yaw,],
+        #                    [-1.43, 0, self.robot_yaw_to_world_yaw,],
+        #                    [0.48, 0, self.robot_yaw_to_world_yaw,],
+        #                    [1.43, 0, self.robot_yaw_to_world_yaw],
+        #                    [-0.48, 0.5, self.robot_yaw_to_world_yaw,],
+        #                    [-1.43, 0.5, self.robot_yaw_to_world_yaw,],
+        #                    [-0.48, -0.5, self.robot_yaw_to_world_yaw,],
+        #                    [-1.43, -0.5, self.robot_yaw_to_world_yaw,],]
+
+        self._landmarks = [[-0.48, 0.5, self.robot_yaw_to_world_yaw,],
+                           [-1.43, 0.5, self.robot_yaw_to_world_yaw,],
+                           [-0.48, -0.7, self.robot_yaw_to_world_yaw,],
+                           [-1.43, -0.7, self.robot_yaw_to_world_yaw,],]
         
         # experiment depth image
         self.depth_img = np.zeros((4, 4))

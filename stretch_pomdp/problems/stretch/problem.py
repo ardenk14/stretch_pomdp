@@ -23,7 +23,7 @@ def init_stretch_pomdp(init_pos,
     
     for i in range(particle_count):
         pos = np.random.normal(init_pos, [0.01, 0.01, 0.017, 0.0, 0., 0, 0, 0, 0, 0, 0, 0, 0])
-        noise_obstacle_pos = np.random.normal(obstacle_loc, [0.2, 0.2])
+        noise_obstacle_pos = np.random.normal(obstacle_loc, [0.1, 0.1])
         particles.append(State(pos,
                         obstacle_loc=noise_obstacle_pos,
                         danger_zone=vamp_env.dz_checker(pos),

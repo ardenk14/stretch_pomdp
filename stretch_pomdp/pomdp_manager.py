@@ -118,13 +118,13 @@ class POMDPManager(Node):
         self.lock = threading.Lock()
 
         # get initial environment sensing
-        # self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
-        self.tf_buffer = tf2_ros.Buffer()
-        self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        ## self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        # self.tf_buffer = tf2_ros.Buffer()
+        # self.listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         # obstacle location relative to robots frame
-        self.obstacle_transform = None # (1, 0, 0)
-        self.abs_obstacle_loc = None
+        # self.obstacle_transform = None # (1, 0, 0)
+        self.abs_obstacle_loc = [-1.19,  0.10]
 
         self.current_config = np.array([0.0, 0.0, 0., 0.5, 0., 0., 0., 0., 0., 0., 0., 0, 0])
         self.obs_lst = []
@@ -147,24 +147,31 @@ class POMDPManager(Node):
         self.vamp_env = VAMPEnv()
         self.vamp_env.visualize_key_features()
         self._Tm = StretchTransitionModel(self.vamp_env)
-        self.problem = None
+
+        # get world poses and create POMDP
         self.abs_stretch_pos = self.current_config[:2] + self.vamp_env.robot_to_world
         self.abs_stretch_yaw = self.current_config[2] + self.vamp_env.robot_yaw_to_world_yaw
+        init_pos = self.current_config
+        init_pos[:2] = self.abs_stretch_pos
+        init_pos[2] = self.abs_stretch_yaw
+        # self.abs_obstacle_loc = self.vamp_env.rPw @ np.array(list(self.obstacle_transform) + [1.])
+        self.problem = init_stretch_pomdp(init_pos, self.abs_obstacle_loc[:2], self.vamp_env)
 
         self.planner = pomdp_py.ROPRAS3(
-            planning_time=2,
-            max_depth=50,
-            rollout_depth=50,
+            planning_time=3,
+            max_depth=25,
+            rollout_depth=25,
             eta=0.2,
             ref_policy_heuristic='uniform',
-            use_prm=False
+            ka = 3,
+            alpha_a = 0.1
         )
 
         self.pp = PathPlanner(self.vamp_env)
 
         # Create timer for control loop
-        self.aruco_timer = self.create_timer(1, self._get_obstacle_transform)
-        self.detect_loop()
+        # self.aruco_timer = self.create_timer(1, self._get_obstacle_transform)
+        # self.detect_loop()
         self.control_timer = self.create_timer(10.0, self.control_loop)
         self.control_loop()
 
@@ -229,7 +236,7 @@ class POMDPManager(Node):
         self.obs_lst.append(Observation(observation))
         self.acts_lst.append(act)
         self.lock.release()
-        rr.log("Observation", rr.Arrows3D(origins=list(observation[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 1.0]))
+        # rr.log("Observation", rr.Arrows3D(origins=list(observation[:2])+[0.0], vectors=[0., 0., 1.], colors=[0.2, 1.0, 1.0]))
 
     def pointcloud_callback(self, msg):
         # Update vamp_env
@@ -263,16 +270,16 @@ class POMDPManager(Node):
 
     def _run_control_loop(self):
         """ Run the POMDP Planner """
-        if self.problem is None:
-            print("WAITING FOR ENVIRONMENT INITIALIZATION")
-            if self.obstacle_transform is not None:
-                init_pos = self.current_config
-                init_pos[:2] = self.abs_stretch_pos
-                init_pos[2] = self.abs_stretch_yaw
-                self.abs_obstacle_loc = self.vamp_env.rPw @ np.array(list(self.obstacle_transform) + [1.])
-                self.problem = init_stretch_pomdp(init_pos, self.abs_obstacle_loc[:2], self.vamp_env)
-            else:
-                return
+        # if self.problem is None:
+        #     print("WAITING FOR ENVIRONMENT INITIALIZATION")
+        #     if self.obstacle_transform is not None:
+        #         init_pos = self.current_config
+        #         init_pos[:2] = self.abs_stretch_pos
+        #         init_pos[2] = self.abs_stretch_yaw
+        #         self.abs_obstacle_loc = self.vamp_env.rPw @ np.array(list(self.obstacle_transform) + [1.])
+        #         self.problem = init_stretch_pomdp(init_pos, self.abs_obstacle_loc[:2], self.vamp_env)
+        #     else:
+        #         return
 
         print("==================")
         print("BEGIN CONTROL LOOP")
@@ -292,9 +299,14 @@ class POMDPManager(Node):
             action = MacroAction(action)
             print("ACT: ", action)
             print("OBS: ", observation)
+
+            # get odom reading --- not neceesarily the true state more
             config = self.current_config 
             config[:2] = self.abs_stretch_pos
             config[2] = self.abs_stretch_yaw
+
+            # move the object
+            self.abs_obstacle_loc[0] += self._Tm.obj_vel_x * len(action)
             state = State(config, 
                           self.abs_obstacle_loc,
                           self.vamp_env.dz_checker(config), 
@@ -314,11 +326,13 @@ class POMDPManager(Node):
 
             # Visualize current belief
             bel = self.problem.agent.belief
+            rr.log("stretch_pos_belief", rr.Clear(recursive=True))
+            rr.log("obstacle_pos_belief", rr.Clear(recursive=True))
             for i, (k, v) in enumerate(bel.get_histogram().items()):
                 robot_pos = list(k.get_position[:2]) + [0.]
                 rr.log(["stretch_pos_belief", str(i)], rr.Points3D(robot_pos, radii=0.05, colors=[255, 247, 28]))
-                # obstacle_pos = list(k.get_obstacle_loc) + [0.]
-                # rr.log(["obstacle_pos_belief", str(i)], rr.Points3D(obstacle_pos, radii=vamp_env.sphere_approx_radius, colors=[28, 111, 255]))
+                obstacle_pos = list(k.get_obstacle_loc) + [0.]
+                rr.log(["obstacle_pos_belief", str(i)], rr.Points3D(obstacle_pos, radii=self.vamp_env.sphere_approx_radius, colors=[28, 111, 255]))
 
             # cylinder_radius = [self.problem._vamp_env.cylinder_approx_radius] * len(obstacle_positions)
             # cylinder_length = [self.problem._vamp_env.cylinder_height] * len(obstacle_positions)

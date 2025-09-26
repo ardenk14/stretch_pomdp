@@ -48,7 +48,7 @@ class PathPlanner:
         #print("TRGT: ", trgt)
         # rr.log("VAMP", rr.LineStrips3D(path))#, rr.Points3D([src, trgt]))
 
-        simple.path.interpolate(vamp.stretch.resolution() // 2)
+        # simple.path.interpolate(vamp.stretch.resolution() // 2)
 
         return [s.to_list() for s in simple.path]
 
